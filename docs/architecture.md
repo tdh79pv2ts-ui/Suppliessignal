@@ -11,7 +11,7 @@ Browser → Supabase Auth → Bearer token → API token verification
                                       → Prisma → PostgreSQL
 ```
 
-Customer users carry a `customerId`; API handlers must validate it server-side. Reviewers and administrators can cross customer boundaries only where a route explicitly permits their role.
+Users receive customer access through explicit `CustomerMembership` records and can belong to multiple customer workspaces. API handlers validate the requested customer against those memberships server-side. Reviewers receive no implicit cross-customer access; they require membership just like customer users. Administrators retain platform-wide access.
 
 The AI, ingestion, and scoring packages deliberately expose only `NOT_CONFIGURED` status constants until their approved phases. There are no fake queues, collectors, or model calls.
 

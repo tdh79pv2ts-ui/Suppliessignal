@@ -6,7 +6,7 @@ export const authenticatedUserSchema = z.object({
   email: z.string().email(),
   name: z.string().nullable(),
   role: z.enum(userRoles),
-  customerId: z.string().uuid().nullable(),
+  customerIds: z.array(z.string().uuid()),
 });
 
 export const bearerTokenSchema = z

@@ -16,13 +16,26 @@ async function main() {
 
   await prisma.user.upsert({
     where: { email: 'customer@demo.suppliesignal.local' },
-    update: { customerId: customer.id },
+    update: {},
     create: {
       // In a configured environment this must match the Supabase Auth user UUID.
       id: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f',
       email: 'customer@demo.suppliesignal.local',
       name: 'Demo Customer',
       role: UserRole.CUSTOMER,
+    },
+  });
+
+  await prisma.customerMembership.upsert({
+    where: {
+      userId_customerId: {
+        userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f',
+        customerId: customer.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f',
       customerId: customer.id,
     },
   });

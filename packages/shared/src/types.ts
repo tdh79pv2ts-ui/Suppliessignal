@@ -6,7 +6,7 @@ export type AuthenticatedUser = {
   email: string;
   name: string | null;
   role: UserRole;
-  customerId: string | null;
+  customerIds: string[];
 };
 
 export type ApiError = {

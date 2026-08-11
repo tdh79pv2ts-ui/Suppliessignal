@@ -33,14 +33,17 @@ export function createUserResolver(env: ServerEnv): ResolveUser {
 }
 
 async function findApplicationUser(id: string): Promise<AuthenticatedUser | null> {
-  const user = await db.user.findUnique({ where: { id } });
+  const user = await db.user.findUnique({
+    where: { id },
+    include: { memberships: { select: { customerId: true } } },
+  });
   if (!user) return null;
   return {
     id: user.id,
     email: user.email,
     name: user.name,
     role: user.role,
-    customerId: user.customerId,
+    customerIds: user.memberships.map((membership) => membership.customerId),
   };
 }
 
@@ -71,5 +74,5 @@ export function requireRole(...roles: UserRole[]) {
 }
 
 export function assertCustomerAccess(user: AuthenticatedUser, requestedCustomerId: string): boolean {
-  return user.role === 'ADMIN' || user.role === 'REVIEWER' || user.customerId === requestedCustomerId;
+  return user.role === 'ADMIN' || user.customerIds.includes(requestedCustomerId);
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { serverEnvSchema } from '../../packages/shared/src/env';
+import { assertProductionAuthSafety, serverEnvSchema } from '../../packages/shared/src/env';
 
 const base = {
   NODE_ENV: 'test',
@@ -21,5 +21,11 @@ describe('server environment', () => {
   it('rejects development auth in production', () => {
     const result = serverEnvSchema.safeParse({ ...base, NODE_ENV: 'production', ALLOW_DEV_AUTH: 'true' });
     expect(result.success).toBe(false);
+  });
+
+  it('fails fast if an invalid production environment bypasses schema parsing', () => {
+    expect(() => assertProductionAuthSafety({ NODE_ENV: 'production', ALLOW_DEV_AUTH: true })).toThrow(
+      'ALLOW_DEV_AUTH must be false',
+    );
   });
 });

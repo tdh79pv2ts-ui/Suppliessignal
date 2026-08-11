@@ -27,3 +27,9 @@ export const serverEnvSchema = z
   });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
+
+export function assertProductionAuthSafety(env: Pick<ServerEnv, 'NODE_ENV' | 'ALLOW_DEV_AUTH'>): void {
+  if (env.NODE_ENV === 'production' && env.ALLOW_DEV_AUTH) {
+    throw new Error('Invalid production configuration: ALLOW_DEV_AUTH must be false');
+  }
+}

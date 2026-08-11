@@ -5,6 +5,7 @@ import type { Express } from 'express';
 import helmet from 'helmet';
 import pinoHttp from 'pino-http';
 import type { HealthResponse, ServerEnv } from '@suppliesignal/shared';
+import { assertProductionAuthSafety } from '@suppliesignal/shared';
 import { assertCustomerAccess, createUserResolver, requireAuth, type ResolveUser } from './auth.js';
 import { createLogger } from './logger.js';
 
@@ -14,6 +15,7 @@ type AppOptions = {
 };
 
 export function createApp({ env, resolveUser = createUserResolver(env) }: AppOptions): Express {
+  assertProductionAuthSafety(env);
   const app = express();
   const logger = createLogger(env.LOG_LEVEL);
 
