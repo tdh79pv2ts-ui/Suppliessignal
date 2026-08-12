@@ -1,10 +1,10 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, global source intelligence, and Phase 4 schema-validated claim extraction. Events, exposure scoring, review workflows, and alerts remain explicitly not configured.
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, global source intelligence, schema-validated claim extraction, the Phase 4.5 validation POC, and Phase 5 deterministic event intelligence. Customer exposure, risk scoring, alerts, Daily Briefs, and notifications remain explicitly unimplemented.
 
 ## Architecture
 
-Phase documentation includes [the extraction validation POC](docs/extraction-validation-poc.md).
+Phase documentation includes [the extraction validation POC](docs/extraction-validation-poc.md) and [event intelligence](docs/event-intelligence.md).
 
 - `apps/web` — React, TypeScript, Vite, Tailwind application shell
 - `apps/api` — Express REST API with structured logging and server-side authorization
@@ -58,9 +58,10 @@ pnpm test            # unit and integration tests
 pnpm db:generate     # generate Prisma client
 pnpm db:migrate      # apply/create development migrations
 pnpm db:seed         # seed the fictional Phase 1 customer/user
-pnpm db:verify-migrations # clean and Phase 2→3 disposable upgrade verification
+pnpm db:verify-migrations # clean and Phase 4.5→5 disposable upgrade verification
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
 pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process
+pnpm --filter @suppliesignal/api start:event-worker # eligible Claim event processing
 ```
 
 ## Production configuration
@@ -69,4 +70,4 @@ Use a managed PostgreSQL database, set `NODE_ENV=production`, configure exact `W
 
 ## Phase status
 
-The customer graph, global source intelligence, and traceable claims layer are available. Claims remain global derived evidence and are not interpreted for customers. The exact next task after approval is **Phase 5 — event construction and cross-source evidence aggregation**, without customer exposure matching.
+Phase 5 is implemented: eligible global Claims become deterministic, deduplicated, fully traceable Events with explicit lifecycle and corroboration metadata. Production worker activation requires an auditable Phase 4.5 `GO` and a separate operational decision. Events are not matched to customer assets. Phase 6 remains unimplemented and requires explicit approval.

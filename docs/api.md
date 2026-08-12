@@ -33,3 +33,7 @@ ADMIN and REVIEWER may read `GET /api/sources`, `/api/sources/:sourceId`, `/api/
 The Phase 4.5 routes under `/api/poc/extraction/datasets` cover dataset creation, explicit article membership, preflight, execution, progress, article and claim evaluation, results, and JSON/CSV export. Administration actions require `ADMIN`; reads and reviews allow `ADMIN` and `REVIEWER`; `CUSTOMER` is denied.
 
 ADMIN triggers `POST /api/source-articles/:articleId/extract` and `/reprocess`. ADMIN and REVIEWER read `/api/source-articles/:articleId/extractions`, `/api/extractions`, `/api/extractions/:extractionId`, `/api/claims`, `/api/claims/:claimId`, and `/api/extraction-metrics`. CUSTOMER access is denied. Extraction and claim lists are paginated and filterable.
+
+## Event intelligence routes
+
+`ADMIN` and `REVIEWER` may list `GET /api/events` and inspect `GET /api/events/:eventId`, including full Claim, extraction run, article, original URL, and source provenance. Lists support page/pageSize plus event type, status, severity, assertion mode, entity, location, country, and date filters. Only `ADMIN` may process an eligible Claim with `POST /api/events/process-claim/:claimId` or apply an explicit lifecycle transition with `PATCH /api/events/:eventId/status`. `CUSTOMER` is denied access to this global corpus.

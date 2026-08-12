@@ -70,4 +70,9 @@ await withDisposablePostgres(async ({ env }) => {
   await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,500);extractionWorker.once('exit',(code)=>{clearTimeout(timer);reject(new Error(`Extraction worker exited early with code ${code}`));});});
   extractionWorker.kill('SIGTERM'); await new Promise((resolve)=>extractionWorker.once('exit',resolve));
   console.log('Extraction worker startup verified (AI disabled, no key required)');
+  const eventWorker = spawn(process.execPath, ['apps/api/dist/apps/api/src/event-worker.js'], { env: { ...apiEnv, EVENT_PROCESSING_ENABLED: 'false' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  eventWorker.stdout.pipe(process.stdout); eventWorker.stderr.pipe(process.stderr);
+  await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,500);eventWorker.once('exit',(code)=>{clearTimeout(timer);reject(new Error(`Event worker exited early with code ${code}`));});});
+  eventWorker.kill('SIGTERM'); await new Promise((resolve)=>eventWorker.once('exit',resolve));
+  console.log('Event worker startup verified (processing disabled)');
 });

@@ -9,6 +9,7 @@
     "start": "node dist/apps/api/src/server.js",
     "start:worker": "node dist/apps/api/src/worker.js",
     "start:extraction-worker": "node dist/apps/api/src/extraction-worker.js",
+    "start:event-worker": "node dist/apps/api/src/event-worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src"
   },

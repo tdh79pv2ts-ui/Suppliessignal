@@ -5,3 +5,4 @@ export * from './supply-chain.js';
 export * from './source-intelligence.js';
 export * from './ai-extraction.js';
 export * from './poc-evaluation.js';
+export * from './event-intelligence.js';

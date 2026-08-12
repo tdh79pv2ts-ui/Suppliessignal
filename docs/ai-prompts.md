@@ -1,3 +1,3 @@
 # AI prompts
 
-AI processing is not part of Phase 1 and is not configured. Phase 4 will introduce versioned extraction prompts, strict Zod output validation, one corrective retry, explicit failure states, and fixtures. Original article data will remain the system of record.
+Phase 4 extraction uses versioned prompts, strict Zod output validation, one corrective retry, explicit failure states, and deterministic fixtures. Original article data remains the system of record. Phase 5 Event construction uses deterministic rules and does not add an event-generation prompt or send customer graph data to an AI provider.

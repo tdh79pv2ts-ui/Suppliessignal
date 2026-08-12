@@ -443,6 +443,217 @@ async function main() {
         },
       });
   }
+
+  const eventFixtureSourceId = '91000000-0000-4000-8000-000000000001';
+  await prisma.source.upsert({
+    where: { id: eventFixtureSourceId },
+    update: {},
+    create: {
+      id: eventFixtureSourceId,
+      name: 'Fictional Phase 5 Event Bulletin',
+      sourceType: 'MANUAL',
+      baseUrl: 'https://phase5-fixture.invalid',
+      category: 'OTHER',
+      reliability: 'HIGH',
+      active: true,
+      collectionEnabled: false,
+    },
+  });
+  const eventFixtureSourceTwoId = '91000000-0000-4000-8000-000000000002';
+  await prisma.source.upsert({
+    where: { id: eventFixtureSourceTwoId },
+    update: {},
+    create: {
+      id: eventFixtureSourceTwoId,
+      name: 'Fictional Independent Logistics Bulletin',
+      sourceType: 'MANUAL',
+      baseUrl: 'https://phase5-independent-fixture.invalid',
+      category: 'LOGISTICS',
+      reliability: 'HIGH',
+      active: true,
+      collectionEnabled: false,
+    },
+  });
+
+  const fixtureClaims = [
+    {
+      articleId: '92000000-0000-4000-8000-000000000001',
+      runId: '93000000-0000-4000-8000-000000000001',
+      claimId: '94000000-0000-4000-8000-000000000001',
+      sourceId: eventFixtureSourceId,
+      title: 'Fictional Port Aurora disruption report',
+      statement: 'Port Aurora operations were disrupted on 2 March 2026.',
+      claimType: 'PORT_DISRUPTION' as const,
+      assertionMode: 'OBSERVED' as const,
+      entityType: 'PORT' as const,
+      entityName: 'Port Aurora',
+      date: new Date('2026-03-02T00:00:00Z'),
+    },
+    {
+      articleId: '92000000-0000-4000-8000-000000000002',
+      runId: '93000000-0000-4000-8000-000000000002',
+      claimId: '94000000-0000-4000-8000-000000000002',
+      sourceId: eventFixtureSourceTwoId,
+      title: 'Independent fictional Port Aurora update',
+      statement: 'A second bulletin confirmed disruption at Port Aurora.',
+      claimType: 'PORT_DISRUPTION' as const,
+      assertionMode: 'OBSERVED' as const,
+      entityType: 'PORT' as const,
+      entityName: 'Port Aurora',
+      date: new Date('2026-03-02T00:00:00Z'),
+    },
+    {
+      articleId: '92000000-0000-4000-8000-000000000003',
+      runId: '93000000-0000-4000-8000-000000000003',
+      claimId: '94000000-0000-4000-8000-000000000003',
+      sourceId: eventFixtureSourceId,
+      title: 'Fictional Port Aurora fire',
+      statement: 'A small fire occurred at Port Aurora.',
+      claimType: 'FIRE' as const,
+      assertionMode: 'OBSERVED' as const,
+      entityType: 'PORT' as const,
+      entityName: 'Port Aurora',
+      date: new Date('2026-03-02T00:00:00Z'),
+    },
+    {
+      articleId: '92000000-0000-4000-8000-000000000004',
+      runId: '93000000-0000-4000-8000-000000000004',
+      claimId: '94000000-0000-4000-8000-000000000004',
+      sourceId: eventFixtureSourceId,
+      title: 'Fictional Port Aurora forecast',
+      statement: 'Analysts forecast a possible future Port Aurora disruption.',
+      claimType: 'PORT_DISRUPTION' as const,
+      assertionMode: 'FORECAST' as const,
+      entityType: 'PORT' as const,
+      entityName: 'Port Aurora',
+      date: new Date('2026-04-02T00:00:00Z'),
+    },
+    {
+      articleId: '92000000-0000-4000-8000-000000000005',
+      runId: '93000000-0000-4000-8000-000000000005',
+      claimId: '94000000-0000-4000-8000-000000000005',
+      sourceId: eventFixtureSourceId,
+      title: 'Fictional conflicting Port Aurora update',
+      statement: 'The announced Port Aurora disruption was cancelled.',
+      claimType: 'PORT_DISRUPTION' as const,
+      assertionMode: 'OBSERVED' as const,
+      entityType: 'PORT' as const,
+      entityName: 'Port Aurora',
+      date: new Date('2026-03-02T00:00:00Z'),
+    },
+  ];
+  for (const fixture of fixtureClaims) {
+    await prisma.sourceArticle.upsert({
+      where: { id: fixture.articleId },
+      update: {},
+      create: {
+        id: fixture.articleId,
+        sourceId: fixture.sourceId,
+        originalUrl: `https://phase5-fixture.invalid/articles/${fixture.articleId}`,
+        title: fixture.title,
+        normalizedText: fixture.statement,
+        publishedAt: fixture.date,
+        contentHash: `phase5-content-${fixture.articleId}`,
+        urlHash: `phase5-url-${fixture.articleId}`,
+        status: 'NORMALIZED',
+      },
+    });
+    await prisma.articleExtractionRun.upsert({
+      where: { id: fixture.runId },
+      update: {},
+      create: {
+        id: fixture.runId,
+        sourceArticleId: fixture.articleId,
+        status: 'COMPLETED',
+        provider: 'fixture',
+        model: 'deterministic-phase5',
+        promptVersion: 'fixture-1',
+        schemaVersion: '1.0',
+        inputHash: `phase5-input-${fixture.runId}`,
+        inputCharacters: fixture.statement.length,
+        claimsExtracted: 1,
+        articleRelevant: true,
+        completedAt: fixture.date,
+      },
+    });
+    await prisma.claim.upsert({
+      where: { id: fixture.claimId },
+      update: {},
+      create: {
+        id: fixture.claimId,
+        sourceArticleId: fixture.articleId,
+        extractionRunId: fixture.runId,
+        claimType: fixture.claimType,
+        assertionMode: fixture.assertionMode,
+        statement: fixture.statement,
+        confidence: 0.85,
+        occurredAt: fixture.date,
+        evidenceText: fixture.statement,
+        evidenceStart: 0,
+        evidenceEnd: fixture.statement.length,
+        entities: {
+          create: {
+            entityType: fixture.entityType,
+            name: fixture.entityName,
+            role: 'affected',
+          },
+        },
+        locations: {
+          create: {
+            name: 'Aurora Harbor',
+            city: 'Aurora Harbor',
+            country: 'Fictionland',
+          },
+        },
+      },
+    });
+  }
+
+  const ambiguousEvents = [
+    ['95000000-0000-4000-8000-000000000001', '2026-05-01'],
+    ['95000000-0000-4000-8000-000000000002', '2026-05-03'],
+  ] as const;
+  for (const [id, dateText] of ambiguousEvents) {
+    const date = new Date(`${dateText}T00:00:00Z`);
+    await prisma.event.upsert({
+      where: { id },
+      update: {},
+      create: {
+        id,
+        eventType: 'STRIKE',
+        status: 'DETECTED',
+        title: 'Fictional ambiguous Harbor Works strike candidate',
+        summary: 'A fictional candidate retained to exercise ambiguity.',
+        severity: 'HIGH',
+        confidence: 0.7,
+        assertionMode: 'OBSERVED',
+        occurredAt: date,
+        observedAt: date,
+        temporalPrecision: 'DAY',
+        firstSeenAt: date,
+        lastSeenAt: date,
+        fingerprint: `STRIKE|OBSERVED|FACTORY:harbor works|fictionland::aurora harbor:aurora harbor|${dateText}`,
+        entities: {
+          create: {
+            entityType: 'FACTORY',
+            name: 'Harbor Works',
+            normalizedName: 'harbor works',
+            normalizedKey: 'FACTORY:harbor works',
+            role: 'affected',
+          },
+        },
+        locations: {
+          create: {
+            locationType: 'CITY',
+            name: 'Aurora Harbor',
+            city: 'Aurora Harbor',
+            country: 'Fictionland',
+            normalizedKey: 'fictionland::aurora harbor:aurora harbor',
+          },
+        },
+      },
+    });
+  }
 }
 
 main()
