@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "pnpm --filter @suppliesignal/shared build && pnpm --filter @suppliesignal/db build && pnpm --parallel --filter @suppliesignal/api --filter @suppliesignal/web dev",
     "build": "pnpm -r --if-present build",
-    "typecheck": "pnpm -r --if-present typecheck",
+    "typecheck": "pnpm --filter @suppliesignal/shared build && pnpm --filter @suppliesignal/db build && pnpm --filter @suppliesignal/ingestion build && pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint",
     "test": "node scripts/run-tests.mjs",
     "test:watch": "vitest",

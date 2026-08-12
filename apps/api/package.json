@@ -7,12 +7,14 @@
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
     "start": "node dist/apps/api/src/server.js",
+    "start:worker": "node dist/apps/api/src/worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.53.0",
     "@suppliesignal/db": "workspace:*",
+    "@suppliesignal/ingestion": "workspace:*",
     "@suppliesignal/shared": "workspace:*",
     "cors": "^2.8.5",
     "dotenv": "^17.2.1",

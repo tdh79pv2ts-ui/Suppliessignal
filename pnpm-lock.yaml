@@ -59,6 +59,9 @@ importers:
       '@suppliesignal/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@suppliesignal/ingestion':
+        specifier: workspace:*
+        version: link:../../packages/ingestion
       '@suppliesignal/shared':
         specifier: workspace:*
         version: link:../../packages/shared

@@ -1,6 +1,6 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. This repository currently implements **Phase 1: Foundation** and **Phase 2: Supply-chain knowledge graph**. Source ingestion, AI processing, events, exposure scoring, review workflows, and alerts remain explicitly not configured.
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, and global Phase 3 source intelligence layer. AI extraction, claims, events, exposure scoring, review workflows, and alerts remain explicitly not configured.
 
 ## Architecture
 
@@ -8,7 +8,8 @@ SupplySignal is a customer-specific, evidence-first supply-chain intelligence pl
 - `apps/api` — Express REST API with structured logging and server-side authorization
 - `packages/db` — Prisma client boundary
 - `packages/shared` — shared Zod schemas and TypeScript contracts
-- `packages/ai`, `packages/scoring`, `packages/ingestion` — explicit phase placeholders with no fake functionality
+- `packages/ingestion` — deterministic RSS/Atom collection, URL/text normalization, hashing, and SSRF-safe network boundary
+- `packages/ai`, `packages/scoring` — explicit future-phase placeholders
 - `prisma` — PostgreSQL schema, migration, and development seed
 - `tests` — unit and integration tests
 
@@ -54,6 +55,8 @@ pnpm test            # unit and integration tests
 pnpm db:generate     # generate Prisma client
 pnpm db:migrate      # apply/create development migrations
 pnpm db:seed         # seed the fictional Phase 1 customer/user
+pnpm db:verify-migrations # clean and Phase 2→3 disposable upgrade verification
+pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
 ```
 
 ## Production configuration
@@ -62,4 +65,4 @@ Use a managed PostgreSQL database, set `NODE_ENV=production`, configure exact `W
 
 ## Phase status
 
-The authenticated foundation and customer-scoped supply-chain graph are available. The graph contains explicit master-data relationships only; it performs no inference, risk, or exposure calculation. The exact next task, after approval, is **Phase 3 — Source layer: source registry, articles, RSS collection, source administration, and deterministic deduplication.**
+The customer graph and global source intelligence layer are available. Source articles preserve provenance and are not interpreted for customers. The exact next task after approval is **Phase 4 — schema-validated claim extraction from SourceArticles**, without events or exposure matching.

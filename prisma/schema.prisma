@@ -36,6 +36,48 @@ enum TransportMode {
   OTHER
 }
 
+enum SourceType {
+  RSS
+  ATOM
+  API
+  WEB
+  MANUAL
+}
+
+enum SourceCategory {
+  NEWS
+  GOVERNMENT
+  REGULATOR
+  INDUSTRY
+  PORT
+  LOGISTICS
+  LABOUR
+  TRADE
+  WEATHER
+  OTHER
+}
+
+enum SourceReliability {
+  LOW
+  MEDIUM
+  HIGH
+  PRIMARY
+}
+
+enum SourceArticleStatus {
+  COLLECTED
+  NORMALIZED
+  FAILED
+  IGNORED
+}
+
+enum CollectionRunStatus {
+  RUNNING
+  SUCCESS
+  PARTIAL
+  FAILED
+}
+
 model User {
   id          String               @id @db.Uuid
   email       String               @unique
@@ -49,18 +91,18 @@ model User {
 }
 
 model Customer {
-  id                    String   @id @default(uuid()) @db.Uuid
+  id                    String               @id @default(uuid()) @db.Uuid
   name                  String
   description           String?
-  defaultAlertThreshold Int      @default(60) @map("default_alert_threshold")
+  defaultAlertThreshold Int                  @default(60) @map("default_alert_threshold")
   memberships           CustomerMembership[]
   suppliers             Supplier[]
   factories             Factory[]
   products              Product[]
   materials             Material[]
-  routes                 Route[]
-  createdAt             DateTime @default(now()) @map("created_at")
-  updatedAt             DateTime @updatedAt @map("updated_at")
+  routes                Route[]
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt @map("updated_at")
 
   @@map("customers")
 }
@@ -144,8 +186,8 @@ model Product {
   factoryProducts  FactoryProduct[]
   productMaterials ProductMaterial[]
   supplierProducts SupplierProduct[]
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
 
   @@unique([id, customerId])
   @@unique([customerId, sku])
@@ -164,8 +206,8 @@ model Material {
   substitutable    Boolean           @default(false)
   active           Boolean           @default(true)
   productMaterials ProductMaterial[]
-  createdAt        DateTime           @default(now()) @map("created_at")
-  updatedAt        DateTime           @updatedAt @map("updated_at")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
 
   @@unique([id, customerId])
   @@index([customerId, active])
@@ -289,4 +331,82 @@ model RouteFactory {
   @@id([routeId, factoryId])
   @@index([customerId])
   @@map("route_factories")
+}
+
+model Source {
+  id                         String                @id @default(uuid()) @db.Uuid
+  name                       String
+  sourceType                 SourceType            @map("source_type")
+  baseUrl                    String                @map("base_url")
+  feedUrl                    String?               @map("feed_url")
+  country                    String?
+  region                     String?
+  language                   String?
+  category                   SourceCategory
+  reliability                SourceReliability
+  active                     Boolean               @default(true)
+  collectionEnabled          Boolean               @default(false) @map("collection_enabled")
+  collectionIntervalMinutes  Int?                  @map("collection_interval_minutes")
+  lastCollectedAt            DateTime?             @map("last_collected_at")
+  lastSuccessfulCollectionAt DateTime?             @map("last_successful_collection_at")
+  lastFailureAt              DateTime?             @map("last_failure_at")
+  consecutiveFailures        Int                   @default(0) @map("consecutive_failures")
+  articles                   SourceArticle[]
+  collectionRuns             SourceCollectionRun[]
+  createdAt                  DateTime              @default(now()) @map("created_at")
+  updatedAt                  DateTime              @updatedAt @map("updated_at")
+
+  @@index([active, collectionEnabled])
+  @@index([sourceType, category])
+  @@map("sources")
+}
+
+model SourceArticle {
+  id             String              @id @default(uuid()) @db.Uuid
+  sourceId       String              @map("source_id") @db.Uuid
+  source         Source              @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  originalUrl    String              @map("original_url")
+  canonicalUrl   String?             @map("canonical_url")
+  externalId     String?             @map("external_id")
+  title          String
+  author         String?
+  publishedAt    DateTime?           @map("published_at")
+  discoveredAt   DateTime            @default(now()) @map("discovered_at")
+  collectedAt    DateTime            @default(now()) @map("collected_at")
+  language       String?
+  rawText        String?             @map("raw_text")
+  normalizedText String?             @map("normalized_text")
+  excerpt        String?
+  contentHash    String              @map("content_hash")
+  urlHash        String              @map("url_hash")
+  status         SourceArticleStatus @default(COLLECTED)
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+
+  @@unique([sourceId, externalId])
+  @@unique([sourceId, urlHash])
+  @@index([sourceId, contentHash])
+  @@index([collectedAt, status])
+  @@map("source_articles")
+}
+
+model SourceCollectionRun {
+  id              String              @id @default(uuid()) @db.Uuid
+  sourceId        String              @map("source_id") @db.Uuid
+  source          Source              @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  collectorType   SourceType          @map("collector_type")
+  startedAt       DateTime            @default(now()) @map("started_at")
+  completedAt     DateTime?           @map("completed_at")
+  status          CollectionRunStatus @default(RUNNING)
+  itemsDiscovered Int                 @default(0) @map("items_discovered")
+  itemsCreated    Int                 @default(0) @map("items_created")
+  itemsUpdated    Int                 @default(0) @map("items_updated")
+  itemsSkipped    Int                 @default(0) @map("items_skipped")
+  itemsFailed     Int                 @default(0) @map("items_failed")
+  errorCode       String?             @map("error_code")
+  errorMessage    String?             @map("error_message")
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  @@index([sourceId, startedAt])
+  @@map("source_collection_runs")
 }

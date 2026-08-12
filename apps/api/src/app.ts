@@ -9,6 +9,7 @@ import { assertProductionAuthSafety } from '@suppliesignal/shared';
 import { assertCustomerAccess, createUserResolver, requireAuth, type ResolveUser } from './auth.js';
 import { createLogger } from './logger.js';
 import { createSupplyChainRouter, supplyChainErrorHandler } from './routes/supply-chain.js';
+import { createSourceIntelligenceRouter } from './routes/source-intelligence.js';
 
 type AppOptions = {
   env: ServerEnv;
@@ -58,13 +59,14 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
     response.json({
       data: {
         customerId,
-        phase: 1,
-        modules: { supplyChain: 'NOT_CONFIGURED', intelligence: 'NOT_CONFIGURED', review: 'NOT_CONFIGURED' },
+        phase: 3,
+        modules: { supplyChain: 'AVAILABLE', intelligence: 'SOURCE_COLLECTION_AVAILABLE', review: 'NOT_CONFIGURED' },
       },
     });
   });
 
   app.use('/api', createSupplyChainRouter(resolveUser));
+  app.use('/api', createSourceIntelligenceRouter(resolveUser));
   app.use(supplyChainErrorHandler);
 
   app.use((_request, response) => {

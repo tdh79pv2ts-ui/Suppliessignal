@@ -48,4 +48,21 @@ await withDisposablePostgres(async ({ env }) => {
     server.kill('SIGTERM');
     await new Promise((resolve) => server.once('exit', resolve));
   }
+  const worker = spawn(
+    process.execPath,
+    ['apps/api/dist/apps/api/src/worker.js'],
+    { env: apiEnv, stdio: ['ignore', 'pipe', 'pipe'] },
+  );
+  worker.stdout.pipe(process.stdout);
+  worker.stderr.pipe(process.stderr);
+  await new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, 500);
+    worker.once('exit', (code) => {
+      clearTimeout(timer);
+      reject(new Error(`Worker exited early with code ${code}`));
+    });
+  });
+  worker.kill('SIGTERM');
+  await new Promise((resolve) => worker.once('exit', resolve));
+  console.log('Source collection worker startup verified');
 });
