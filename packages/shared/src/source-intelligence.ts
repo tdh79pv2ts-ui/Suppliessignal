@@ -38,7 +38,7 @@ const webUrl = z
   });
 const optionalText = z.string().trim().min(1).max(255).nullable().optional();
 
-const sourceBaseSchema = z.object({
+const sourceFieldsSchema = z.object({
   name: z.string().trim().min(1).max(255),
   sourceType: z.enum(sourceTypes),
   baseUrl: webUrl,
@@ -62,7 +62,7 @@ const sourceBaseSchema = z.object({
     .nullable()
     .optional(),
 });
-export const sourceCreateSchema = sourceBaseSchema.superRefine(
+export const sourceConfigurationSchema = sourceFieldsSchema.superRefine(
   (value, context) => {
     if (['RSS', 'ATOM'].includes(value.sourceType) && !value.feedUrl)
       context.addIssue({
@@ -72,7 +72,8 @@ export const sourceCreateSchema = sourceBaseSchema.superRefine(
       });
   },
 );
-export const sourceUpdateSchema = sourceBaseSchema
+export const sourceCreateSchema = sourceConfigurationSchema;
+export const sourceUpdateSchema = sourceFieldsSchema
   .partial()
   .refine(
     (value) => Object.keys(value).length > 0,

@@ -7,7 +7,11 @@ import {
   normalizeUrl,
   type CollectedItem,
 } from '@suppliesignal/ingestion';
-import type { ManualArticleInput, SourceInput } from '@suppliesignal/shared';
+import {
+  sourceConfigurationSchema,
+  type ManualArticleInput,
+  type SourceInput,
+} from '@suppliesignal/shared';
 import { ServiceError } from './errors.js';
 
 type Page = { page: number; pageSize: number };
@@ -123,17 +127,28 @@ export class SourceIntelligenceService {
     });
   }
   async updateSource(id: string, data: Record<string, unknown>) {
-    await this.getSource(id);
-    const next = {
+    const current = await this.getSource(id);
+    const complete = sourceConfigurationSchema.safeParse({
+      ...current,
       ...data,
-      ...(typeof data.baseUrl === 'string'
-        ? { baseUrl: normalizeUrl(data.baseUrl) }
-        : {}),
-      ...(typeof data.feedUrl === 'string'
-        ? { feedUrl: normalizeUrl(data.feedUrl) }
-        : {}),
+    });
+    if (!complete.success)
+      throw new ServiceError(
+        'VALIDATION_ERROR',
+        'Resulting source configuration is invalid',
+        400,
+      );
+    const next = {
+      ...complete.data,
+      baseUrl: normalizeUrl(complete.data.baseUrl),
+      feedUrl: complete.data.feedUrl
+        ? normalizeUrl(complete.data.feedUrl)
+        : null,
     };
-    return db.source.update({ where: { id }, data: next });
+    return db.source.update({
+      where: { id },
+      data: next as Prisma.SourceUpdateInput,
+    });
   }
   async listRuns(sourceId: string, f: Page) {
     await this.getSource(sourceId);

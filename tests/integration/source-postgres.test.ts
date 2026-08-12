@@ -23,6 +23,48 @@ const rss = readFileSync(
 );
 afterAll(async () => db.$disconnect());
 describe.sequential('source intelligence with PostgreSQL', () => {
+  it('validates the complete resulting source configuration on update', async () => {
+    const service = new SourceIntelligenceService();
+    const web = await service.createSource({
+      name: 'Web source',
+      sourceType: 'WEB',
+      baseUrl: 'https://web.example/',
+      category: 'NEWS',
+      reliability: 'MEDIUM',
+      active: true,
+      collectionEnabled: false,
+    });
+    await expect(
+      service.updateSource(web.id, { sourceType: 'RSS' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+
+    const rssSource = await service.createSource({
+      name: 'Update RSS',
+      sourceType: 'RSS',
+      baseUrl: 'https://updates.example/',
+      feedUrl: 'https://updates.example/feed.xml',
+      category: 'NEWS',
+      reliability: 'HIGH',
+      active: true,
+      collectionEnabled: true,
+    });
+    await expect(
+      service.updateSource(rssSource.id, { feedUrl: null }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(
+      service.updateSource(rssSource.id, {
+        feedUrl: 'https://updates.example/new-feed.xml',
+      }),
+    ).resolves.toMatchObject({
+      feedUrl: 'https://updates.example/new-feed.xml',
+    });
+    await expect(
+      service.updateSource(rssSource.id, { baseUrl: 'file:///etc/passwd' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+    await expect(
+      service.updateSource(rssSource.id, { feedUrl: 'data:text/plain,bad' }),
+    ).rejects.toMatchObject({ code: 'VALIDATION_ERROR' });
+  });
   it('persists runs/articles and remains idempotent', async () => {
     const service = new SourceIntelligenceService(
       () => new FeedCollector(async () => rss),

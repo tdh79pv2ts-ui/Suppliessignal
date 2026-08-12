@@ -48,13 +48,26 @@ describe('deterministic ingestion', () => {
 });
 describe('SSRF protection', () => {
   it.each([
-    ['http://localhost/a', '127.0.0.1'],
-    ['http://127.0.0.2/a', '127.0.0.2'],
+    ['http://zero/a', '0.1.2.3'],
     ['http://private/a', '10.0.0.1'],
+    ['http://carrier/a', '100.64.0.1'],
+    ['http://127.0.0.2/a', '127.0.0.2'],
+    ['http://link-local/a', '169.254.169.254'],
+    ['http://private/a', '172.31.255.255'],
     ['http://private/a', '192.168.1.1'],
-    ['http://private/a', '169.254.169.254'],
+    ['http://unspecified/a', '::'],
     ['http://private/a', '::1'],
+    ['http://private/a', 'fc00::1'],
+    ['http://private/a', 'fdff::1'],
     ['http://private/a', 'fe80::1'],
+    ['http://mapped/a', '::ffff:0.1.2.3'],
+    ['http://mapped/a', '::ffff:10.0.0.1'],
+    ['http://mapped/a', '::ffff:100.64.0.1'],
+    ['http://mapped/a', '::ffff:127.0.0.1'],
+    ['http://mapped/a', '::ffff:169.254.1.1'],
+    ['http://mapped/a', '::ffff:172.16.0.1'],
+    ['http://mapped/a', '::ffff:192.168.0.1'],
+    ['http://mapped/a', '::ffff:c0a8:101'],
   ])('rejects unsafe destination %s -> %s', async (url, address) => {
     await expect(
       assertSafeUrl(url, async () => [address]),
@@ -66,42 +79,70 @@ describe('SSRF protection', () => {
     });
   });
   it('validates redirect destinations', async () => {
-    const fetcher = vi
+    const requester = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(null, {
+        {
           status: 302,
-          headers: { location: 'http://private/internal' },
-        }),
+          location: 'http://private/internal',
+          body: new Uint8Array(),
+        },
       );
     await expect(
       safeFetch('https://public.example/feed', {
-        fetcher,
+        requester,
         resolver: async (host) => [
           host === 'private' ? '10.0.0.2' : '93.184.216.34',
         ],
       }),
     ).rejects.toMatchObject({ code: 'UNSAFE_SOURCE_URL' });
+    expect(requester).toHaveBeenCalledTimes(1);
+  });
+  it('pins the validated address so a later DNS answer cannot rebind', async () => {
+    const resolver = vi
+      .fn()
+      .mockResolvedValueOnce(['93.184.216.34'])
+      .mockResolvedValueOnce(['127.0.0.1']);
+    const requester = vi.fn(async (_url, pinnedAddress: string) => ({
+      status: 200,
+      body: new TextEncoder().encode(pinnedAddress),
+    }));
+    await expect(
+      safeFetch('https://public.example/feed', { resolver, requester }),
+    ).resolves.toBe('93.184.216.34');
+    expect(resolver).toHaveBeenCalledTimes(1);
+    expect(requester).toHaveBeenCalledWith(
+      expect.objectContaining({ hostname: 'public.example' }),
+      '93.184.216.34',
+      expect.any(Object),
+    );
   });
   it('rejects oversized responses', async () => {
     await expect(
       safeFetch('https://public.example/feed', {
-        fetcher: async () => new Response('oversized'),
+        requester: async () => ({
+          status: 200,
+          body: new TextEncoder().encode('oversized'),
+        }),
         resolver: async () => ['93.184.216.34'],
         maxBytes: 3,
       }),
     ).rejects.toMatchObject({ code: 'RESPONSE_TOO_LARGE' });
   });
   it('handles timeouts safely', async () => {
-    const fetcher: typeof fetch = async (_input, init) =>
+    const requester = async (
+      _url: URL,
+      _address: string,
+      options: { signal: AbortSignal },
+    ) =>
       new Promise((_resolve, reject) =>
-        init?.signal?.addEventListener('abort', () =>
+        options.signal.addEventListener('abort', () =>
           reject(new Error('aborted')),
         ),
       );
     await expect(
       safeFetch('https://public.example/feed', {
-        fetcher,
+        requester,
         resolver: async () => ['93.184.216.34'],
         timeoutMs: 5,
       }),
