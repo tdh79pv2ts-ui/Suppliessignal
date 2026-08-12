@@ -4,4 +4,4 @@ Phase 1 contains `customers`, `users`, and `customer_memberships`. User IDs inte
 
 Run migrations with `pnpm db:migrate`, seed with `pnpm db:seed`, and inspect locally with `pnpm db:studio`. The seed customer and user are fictional. No password is stored in PostgreSQL.
 
-Phase 2 will add the supply-chain graph. Later migrations will add sources, articles, claims, events, exposures, scores, alerts, reviews, and briefs in their corresponding phases.
+Phase 2 adds `suppliers`, `factories`, `products`, `materials`, `routes`, and global `ports`, plus explicit join tables. Customer-owned join rows carry `customer_id` and use composite foreign keys so both endpoints must belong to the same tenant. Later migrations add intelligence entities only in their approved phases.

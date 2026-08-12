@@ -13,6 +13,29 @@ enum UserRole {
   CUSTOMER
 }
 
+enum SupplierTier {
+  TIER_1
+  TIER_2
+  TIER_3
+  OTHER
+}
+
+enum Criticality {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TransportMode {
+  ROAD
+  RAIL
+  SEA
+  AIR
+  MULTIMODAL
+  OTHER
+}
+
 model User {
   id          String               @id @db.Uuid
   email       String               @unique
@@ -31,6 +54,11 @@ model Customer {
   description           String?
   defaultAlertThreshold Int      @default(60) @map("default_alert_threshold")
   memberships           CustomerMembership[]
+  suppliers             Supplier[]
+  factories             Factory[]
+  products              Product[]
+  materials             Material[]
+  routes                 Route[]
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
 
@@ -49,4 +77,216 @@ model CustomerMembership {
   @@unique([userId, customerId])
   @@index([customerId])
   @@map("customer_memberships")
+}
+
+model Supplier {
+  id               String            @id @default(uuid()) @db.Uuid
+  customerId       String            @map("customer_id") @db.Uuid
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name             String
+  legalName        String?           @map("legal_name")
+  country          String
+  city             String?
+  latitude         Decimal?          @db.Decimal(9, 6)
+  longitude        Decimal?          @db.Decimal(9, 6)
+  supplierType     String?           @map("supplier_type")
+  tier             SupplierTier
+  criticality      Criticality
+  active           Boolean           @default(true)
+  factories        Factory[]
+  supplierProducts SupplierProduct[]
+  routeSuppliers   RouteSupplier[]
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  @@unique([id, customerId])
+  @@index([customerId, active])
+  @@index([customerId, country])
+  @@map("suppliers")
+}
+
+model Factory {
+  id              String           @id @default(uuid()) @db.Uuid
+  customerId      String           @map("customer_id") @db.Uuid
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplierId      String?          @map("supplier_id") @db.Uuid
+  supplier        Supplier?        @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  name            String
+  address         String?
+  country         String
+  city            String?
+  latitude        Decimal?         @db.Decimal(9, 6)
+  longitude       Decimal?         @db.Decimal(9, 6)
+  productionType  String?          @map("production_type")
+  criticality     Criticality
+  active          Boolean          @default(true)
+  factoryProducts FactoryProduct[]
+  routeFactories  RouteFactory[]
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+
+  @@unique([id, customerId])
+  @@index([customerId, active])
+  @@index([customerId, supplierId])
+  @@map("factories")
+}
+
+model Product {
+  id               String            @id @default(uuid()) @db.Uuid
+  customerId       String            @map("customer_id") @db.Uuid
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name             String
+  sku              String?
+  category         String?
+  description      String?
+  criticality      Criticality
+  active           Boolean           @default(true)
+  factoryProducts  FactoryProduct[]
+  productMaterials ProductMaterial[]
+  supplierProducts SupplierProduct[]
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  @@unique([id, customerId])
+  @@unique([customerId, sku])
+  @@index([customerId, active])
+  @@map("products")
+}
+
+model Material {
+  id               String            @id @default(uuid()) @db.Uuid
+  customerId       String            @map("customer_id") @db.Uuid
+  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name             String
+  category         String?
+  commodity        String?
+  criticality      Criticality
+  substitutable    Boolean           @default(false)
+  active           Boolean           @default(true)
+  productMaterials ProductMaterial[]
+  createdAt        DateTime           @default(now()) @map("created_at")
+  updatedAt        DateTime           @updatedAt @map("updated_at")
+
+  @@unique([id, customerId])
+  @@index([customerId, active])
+  @@map("materials")
+}
+
+model Port {
+  id         String      @id @default(uuid()) @db.Uuid
+  name       String
+  country    String
+  city       String?
+  latitude   Decimal?    @db.Decimal(9, 6)
+  longitude  Decimal?    @db.Decimal(9, 6)
+  portCode   String?     @unique @map("port_code")
+  active     Boolean     @default(true)
+  routePorts RoutePort[]
+  createdAt  DateTime    @default(now()) @map("created_at")
+  updatedAt  DateTime    @updatedAt @map("updated_at")
+
+  @@index([active, country])
+  @@map("ports")
+}
+
+model Route {
+  id               String          @id @default(uuid()) @db.Uuid
+  customerId       String          @map("customer_id") @db.Uuid
+  customer         Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name             String
+  originLabel      String          @map("origin_label")
+  destinationLabel String          @map("destination_label")
+  transportMode    TransportMode   @map("transport_mode")
+  criticality      Criticality
+  active           Boolean         @default(true)
+  routePorts       RoutePort[]
+  routeSuppliers   RouteSupplier[]
+  routeFactories   RouteFactory[]
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+
+  @@unique([id, customerId])
+  @@index([customerId, active])
+  @@map("routes")
+}
+
+model FactoryProduct {
+  customerId String   @map("customer_id") @db.Uuid
+  factoryId  String   @map("factory_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  factory    Factory  @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product    Product  @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([factoryId, productId])
+  @@index([customerId])
+  @@map("factory_products")
+}
+
+model ProductMaterial {
+  customerId String   @map("customer_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  materialId String   @map("material_id") @db.Uuid
+  product    Product  @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material   Material @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([productId, materialId])
+  @@index([customerId])
+  @@map("product_materials")
+}
+
+model SupplierProduct {
+  customerId String   @map("customer_id") @db.Uuid
+  supplierId String   @map("supplier_id") @db.Uuid
+  productId  String   @map("product_id") @db.Uuid
+  supplier   Supplier @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  product    Product  @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([supplierId, productId])
+  @@index([customerId])
+  @@map("supplier_products")
+}
+
+model RoutePort {
+  customerId String   @map("customer_id") @db.Uuid
+  routeId    String   @map("route_id") @db.Uuid
+  portId     String   @map("port_id") @db.Uuid
+  sequence   Int
+  route      Route    @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  port       Port     @relation(fields: [portId], references: [id], onDelete: Restrict)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([routeId, portId])
+  @@unique([routeId, sequence])
+  @@index([customerId])
+  @@index([portId])
+  @@map("route_ports")
+}
+
+model RouteSupplier {
+  customerId String   @map("customer_id") @db.Uuid
+  routeId    String   @map("route_id") @db.Uuid
+  supplierId String   @map("supplier_id") @db.Uuid
+  route      Route    @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  supplier   Supplier @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([routeId, supplierId])
+  @@index([customerId])
+  @@map("route_suppliers")
+}
+
+model RouteFactory {
+  customerId String   @map("customer_id") @db.Uuid
+  routeId    String   @map("route_id") @db.Uuid
+  factoryId  String   @map("factory_id") @db.Uuid
+  route      Route    @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory    Factory  @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@id([routeId, factoryId])
+  @@index([customerId])
+  @@map("route_factories")
 }

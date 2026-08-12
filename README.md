@@ -1,6 +1,6 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. This repository currently implements **Phase 1: Foundation** only. Supply-chain entities, source ingestion, AI processing, events, exposure scoring, review workflows, and alerts are explicitly not configured yet.
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. This repository currently implements **Phase 1: Foundation** and **Phase 2: Supply-chain knowledge graph**. Source ingestion, AI processing, events, exposure scoring, review workflows, and alerts remain explicitly not configured.
 
 ## Architecture
 
@@ -62,4 +62,4 @@ Use a managed PostgreSQL database, set `NODE_ENV=production`, configure exact `W
 
 ## Phase status
 
-Phase 1 provides a working authenticated application foundation and a dashboard shell that honestly displays later modules as not configured. The exact next task, after approval, is **Phase 2 — Supply-chain graph: implement customer-scoped suppliers, factories, products, materials, routes, ports, relationships, APIs, CRUD interfaces, and tests.**
+The authenticated foundation and customer-scoped supply-chain graph are available. The graph contains explicit master-data relationships only; it performs no inference, risk, or exposure calculation. The exact next task, after approval, is **Phase 3 — Source layer: source registry, articles, RSS collection, source administration, and deterministic deduplication.**

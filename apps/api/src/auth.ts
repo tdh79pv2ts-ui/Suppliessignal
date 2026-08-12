@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import type { NextFunction, Request, Response } from 'express';
 import type { AuthenticatedUser, ServerEnv, UserRole } from '@suppliesignal/shared';
-import { bearerTokenSchema } from '@suppliesignal/shared';
+import { bearerTokenSchema, customerParamsSchema } from '@suppliesignal/shared';
 import { db } from '@suppliesignal/db';
 
 export type ResolveUser = (request: Request) => Promise<AuthenticatedUser | null>;
@@ -75,4 +75,17 @@ export function requireRole(...roles: UserRole[]) {
 
 export function assertCustomerAccess(user: AuthenticatedUser, requestedCustomerId: string): boolean {
   return user.role === 'ADMIN' || user.customerIds.includes(requestedCustomerId);
+}
+
+export function requireCustomerAccess(request: Request, response: Response, next: NextFunction) {
+  const customerId = request.params.customerId;
+  if (!customerParamsSchema.safeParse({ customerId }).success) {
+    response.status(400).json({ error: { code: 'VALIDATION_ERROR', message: 'A valid customer UUID is required' } });
+    return;
+  }
+  if (typeof customerId !== 'string' || !request.authUser || !assertCustomerAccess(request.authUser, customerId)) {
+    response.status(403).json({ error: { code: 'CUSTOMER_ACCESS_DENIED', message: 'Customer access requires an explicit membership' } });
+    return;
+  }
+  next();
 }

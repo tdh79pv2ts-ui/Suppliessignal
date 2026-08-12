@@ -1,6 +1,7 @@
 import { Activity, Boxes, FileCheck2, LayoutDashboard, LogOut, RadioTower, Settings, ShieldCheck } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/auth';
+import { useWorkspace } from '../lib/workspace';
 
 const navigation = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
@@ -11,6 +12,7 @@ const navigation = [
 ];
 
 export function AppShell() {
+  const { customerId, workspaces, setCustomerId } = useWorkspace();
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
       <aside className="border-b bg-ink text-white lg:min-h-screen lg:border-b-0 lg:border-r lg:border-white/10">
@@ -31,7 +33,7 @@ export function AppShell() {
       </aside>
       <main className="min-w-0">
         <header className="flex h-16 items-center justify-between border-b bg-white px-5 sm:px-8">
-          <div><div className="text-xs font-medium uppercase tracking-wider text-muted">Customer workspace</div><div className="text-sm font-semibold">Demo Apparel Group</div></div>
+          <div><label className="text-xs font-medium uppercase tracking-wider text-muted" htmlFor="workspace">Customer workspace</label><select id="workspace" value={customerId} onChange={(event) => setCustomerId(event.target.value)} className="block bg-transparent text-sm font-semibold focus:outline-none">{workspaces.map((workspace) => <option key={workspace.id} value={workspace.id}>{workspace.name}</option>)}</select></div>
           <div className="flex items-center gap-2 rounded-full border bg-canvas px-3 py-1.5 text-xs font-medium text-muted"><ShieldCheck className="h-3.5 w-3.5 text-signal" /> Secure session</div>
         </header>
         <Outlet />

@@ -8,6 +8,7 @@ import type { HealthResponse, ServerEnv } from '@suppliesignal/shared';
 import { assertProductionAuthSafety } from '@suppliesignal/shared';
 import { assertCustomerAccess, createUserResolver, requireAuth, type ResolveUser } from './auth.js';
 import { createLogger } from './logger.js';
+import { createSupplyChainRouter, supplyChainErrorHandler } from './routes/supply-chain.js';
 
 type AppOptions = {
   env: ServerEnv;
@@ -62,6 +63,9 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
       },
     });
   });
+
+  app.use('/api', createSupplyChainRouter(resolveUser));
+  app.use(supplyChainErrorHandler);
 
   app.use((_request, response) => {
     response.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
