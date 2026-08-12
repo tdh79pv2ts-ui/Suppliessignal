@@ -22,6 +22,7 @@ import {
   SourceDetailPage,
   SourcesPage,
 } from './pages/SourcePages';
+import { ClaimDetailPage, ClaimsPage } from './pages/ClaimsPages';
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -166,6 +167,8 @@ export function App() {
             )
           }
         />
+        <Route path="/claims" element={globalIntelligenceAllowed ? <ClaimsPage /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/claims/:id" element={globalIntelligenceAllowed ? <ClaimDetailPage /> : <Navigate to="/dashboard" replace />} />
         <Route
           path="/review"
           element={<PlaceholderPage title="Review queue" phase={8} />}

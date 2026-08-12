@@ -5,5 +5,5 @@
     "rootDir": "../..",
     "types": ["node"]
   },
-  "include": ["src", "../../packages/shared/src", "../../packages/db/src"]
+  "include": ["src", "../../packages/shared/src", "../../packages/db/src", "../../packages/ai/src"]
 }

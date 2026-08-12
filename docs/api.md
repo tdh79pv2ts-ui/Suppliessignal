@@ -27,3 +27,7 @@ Relationship endpoints attach and detach products, materials, suppliers, factori
 ## Source intelligence routes
 
 ADMIN and REVIEWER may read `GET /api/sources`, `/api/sources/:sourceId`, `/api/sources/:sourceId/runs`, `/api/source-articles`, and `/api/source-articles/:articleId`. Only ADMIN may create/update sources, `POST /api/sources/:sourceId/collect`, or `POST /api/source-articles/manual`. CUSTOMER requests receive `FORBIDDEN`. Lists use page/pageSize pagination and documented source/article filters.
+
+## AI extraction routes
+
+ADMIN triggers `POST /api/source-articles/:articleId/extract` and `/reprocess`. ADMIN and REVIEWER read `/api/source-articles/:articleId/extractions`, `/api/extractions`, `/api/extractions/:extractionId`, `/api/claims`, `/api/claims/:claimId`, and `/api/extraction-metrics`. CUSTOMER access is denied. Extraction and claim lists are paginated and filterable.

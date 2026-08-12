@@ -16,6 +16,10 @@ export const serverEnvSchema = z
     WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
     ALLOW_DEV_AUTH: booleanString,
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+    AI_EXTRACTION_ENABLED: booleanString,
+    OPENAI_API_KEY: z.string().min(1).optional(),
+    OPENAI_EXTRACTION_MODEL: z.string().min(1).default('gpt-5-mini'),
+    EXTRACTION_BATCH_SIZE: z.coerce.number().int().min(1).max(25).default(5),
   })
   .superRefine((env, context) => {
     if (env.NODE_ENV === 'production' && env.ALLOW_DEV_AUTH) {
@@ -24,6 +28,7 @@ export const serverEnvSchema = z
     if (!env.ALLOW_DEV_AUTH && (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY)) {
       context.addIssue({ code: z.ZodIssueCode.custom, path: ['SUPABASE_URL'], message: 'Supabase configuration is required unless development auth is enabled' });
     }
+    if (env.AI_EXTRACTION_ENABLED && !env.OPENAI_API_KEY) context.addIssue({ code: z.ZodIssueCode.custom, path: ['OPENAI_API_KEY'], message: 'OpenAI API key is required when extraction is enabled' });
   });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -27,6 +27,7 @@ export function AppShell() {
           ...baseNavigation.slice(0, 2),
           { label: 'Sources', to: '/sources', icon: RadioTower },
           { label: 'Articles', to: '/source-articles', icon: FileCheck2 },
+          { label: 'Claims', to: '/claims', icon: FileCheck2 },
           ...baseNavigation.slice(2),
         ]
       : baseNavigation;

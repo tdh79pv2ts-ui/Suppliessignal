@@ -28,4 +28,10 @@ describe('server environment', () => {
       'ALLOW_DEV_AUTH must be false',
     );
   });
+
+  it('requires an OpenAI key only when AI extraction is enabled', () => {
+    expect(serverEnvSchema.safeParse({ ...base, ALLOW_DEV_AUTH: 'true', AI_EXTRACTION_ENABLED: 'true' }).success).toBe(false);
+    expect(serverEnvSchema.safeParse({ ...base, ALLOW_DEV_AUTH: 'true', AI_EXTRACTION_ENABLED: 'true', OPENAI_API_KEY: 'test-key' }).success).toBe(true);
+    expect(serverEnvSchema.safeParse({ ...base, ALLOW_DEV_AUTH: 'true', AI_EXTRACTION_ENABLED: 'false' }).success).toBe(true);
+  });
 });

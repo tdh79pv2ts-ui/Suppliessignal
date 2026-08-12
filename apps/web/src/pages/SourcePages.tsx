@@ -48,6 +48,7 @@ type Article = {
   status: string;
   source: Source;
 };
+type ExtractionRun = { id:string;status:string;provider:string;model:string;promptVersion:string;schemaVersion:string;startedAt:string;completedAt?:string;inputTokens?:number;outputTokens?:number;claimsExtracted:number;errorCode?:string;claims:{id:string;claimType:string;statement:string;evidenceText:string}[] };
 const err = (e: unknown) =>
   e instanceof ApiRequestError ? `${e.code}: ${e.message}` : 'Unexpected error';
 const fields = [
@@ -532,13 +533,15 @@ export function ArticlesPage() {
 }
 export function ArticleDetailPage() {
   const { id = '' } = useParams();
+  const { user } = useWorkspace();
   const [a, setA] = useState<Article | null>(null);
+  const [runs,setRuns]=useState<ExtractionRun[]>([]);
   const [error, setError] = useState('');
-  useEffect(() => {
-    void apiRequest<Article>(`/source-articles/${id}`)
-      .then(setA)
+  const load=()=>void Promise.all([apiRequest<Article>(`/source-articles/${id}`),apiRequest<ExtractionRun[]>(`/source-articles/${id}/extractions`)])
+      .then(([article,extractions])=>{setA(article);setRuns(extractions);})
       .catch((e) => setError(err(e)));
-  }, [id]);
+  useEffect(load, [id]);
+  async function extract(reprocess=false){try{await apiRequest(`/source-articles/${id}/${reprocess?'reprocess':'extract'}`,{method:'POST'});load();}catch(e){setError(err(e));}}
   return (
     <Page title={a?.title ?? 'Article'}>
       {error && <Error text={error} />}{' '}
@@ -566,6 +569,7 @@ export function ArticleDetailPage() {
           <div className="mt-6 whitespace-pre-wrap text-sm">
             {a.normalizedText ?? 'No normalized body available.'}
           </div>
+          <section className="mt-8 border-t pt-5"><h2 className="font-semibold">AI extraction</h2>{user.role==='ADMIN'&&<div className="my-3 flex gap-2"><button className="rounded bg-signal px-3 py-2 text-white" onClick={()=>void extract(false)}>Extract</button><button className="rounded border px-3 py-2" onClick={()=>void extract(true)}>Reprocess</button></div>}{runs.length===0?<p className="text-sm text-muted">Not processed.</p>:runs.map((run)=><div className="mt-3 rounded-lg border p-3 text-sm" key={run.id}><b>{run.status}</b> · {run.provider}/{run.model} · prompt {run.promptVersion} · schema {run.schemaVersion}<div>{run.startedAt} → {run.completedAt??'running'} · tokens {run.inputTokens??'—'}/{run.outputTokens??'—'} · claims {run.claimsExtracted}</div>{run.errorCode&&<div className="text-red-700">{run.errorCode}</div>}{run.claims.map((claim)=><Link className="mt-2 block text-signal" to={`/claims/${claim.id}`} key={claim.id}>{claim.claimType}: {claim.statement}</Link>)}</div>)}</section>
         </div>
       )}
     </Page>

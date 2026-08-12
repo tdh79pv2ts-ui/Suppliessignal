@@ -78,6 +78,73 @@ enum CollectionRunStatus {
   FAILED
 }
 
+enum ExtractionRunStatus {
+  PROCESSING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
+enum ClaimType {
+  LABOUR_DISRUPTION
+  STRIKE
+  FACTORY_DISRUPTION
+  FACTORY_CLOSURE
+  PORT_DISRUPTION
+  LOGISTICS_DISRUPTION
+  TRANSPORT_DISRUPTION
+  WEATHER_DISRUPTION
+  NATURAL_HAZARD
+  FIRE
+  FLOOD
+  EARTHQUAKE
+  CYCLONE
+  TYPHOON
+  POLITICAL_DISRUPTION
+  CIVIL_UNREST
+  TRADE_RESTRICTION
+  IMPORT_RESTRICTION
+  EXPORT_RESTRICTION
+  SANCTION
+  REGULATORY_CHANGE
+  CUSTOMS_CHANGE
+  TARIFF_CHANGE
+  MATERIAL_SHORTAGE
+  ENERGY_DISRUPTION
+  INFRASTRUCTURE_DISRUPTION
+  SECURITY_INCIDENT
+  OTHER
+}
+
+enum AssertionMode {
+  OBSERVED
+  REPORTED
+  ANNOUNCED
+  FORECAST
+  PLANNED
+  ESTIMATED
+}
+
+enum ClaimEntityType {
+  ORGANIZATION
+  COMPANY
+  GOVERNMENT
+  REGULATOR
+  INDUSTRY_ASSOCIATION
+  LABOUR_UNION
+  FACTORY
+  PORT
+  AIRPORT
+  CITY
+  REGION
+  COUNTRY
+  PRODUCT
+  MATERIAL
+  COMMODITY
+  TRANSPORT_ROUTE
+  OTHER
+}
+
 model User {
   id          String               @id @db.Uuid
   email       String               @unique
@@ -380,6 +447,8 @@ model SourceArticle {
   contentHash    String              @map("content_hash")
   urlHash        String              @map("url_hash")
   status         SourceArticleStatus @default(COLLECTED)
+  extractionRuns ArticleExtractionRun[]
+  claims         Claim[]
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
 
@@ -388,6 +457,93 @@ model SourceArticle {
   @@index([sourceId, contentHash])
   @@index([collectedAt, status])
   @@map("source_articles")
+}
+
+model ArticleExtractionRun {
+  id                String              @id @default(uuid()) @db.Uuid
+  sourceArticleId   String              @map("source_article_id") @db.Uuid
+  sourceArticle     SourceArticle       @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  status            ExtractionRunStatus @default(PROCESSING)
+  provider          String
+  model             String
+  promptVersion     String              @map("prompt_version")
+  schemaVersion     String              @map("schema_version")
+  inputHash         String              @map("input_hash")
+  inputCharacters   Int                 @map("input_characters")
+  inputTruncated    Boolean             @default(false) @map("input_truncated")
+  inputTokens       Int?                @map("input_tokens")
+  outputTokens      Int?                @map("output_tokens")
+  claimsExtracted   Int                 @default(0) @map("claims_extracted")
+  articleRelevant   Boolean?            @map("article_relevant")
+  startedAt         DateTime            @default(now()) @map("started_at")
+  completedAt       DateTime?           @map("completed_at")
+  errorCode         String?             @map("error_code")
+  errorMessage      String?             @map("error_message")
+  claims            Claim[]
+  createdAt         DateTime            @default(now()) @map("created_at")
+
+  @@index([sourceArticleId, startedAt])
+  @@index([status, startedAt])
+  @@map("article_extraction_runs")
+}
+
+model Claim {
+  id              String               @id @default(uuid()) @db.Uuid
+  sourceArticleId String               @map("source_article_id") @db.Uuid
+  extractionRunId String               @map("extraction_run_id") @db.Uuid
+  sourceArticle   SourceArticle        @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  extractionRun   ArticleExtractionRun @relation(fields: [extractionRunId], references: [id], onDelete: Restrict)
+  claimType       ClaimType            @map("claim_type")
+  assertionMode   AssertionMode        @map("assertion_mode")
+  statement       String
+  confidence      Decimal              @db.Decimal(4, 3)
+  occurredAt      DateTime?            @map("occurred_at")
+  validFrom       DateTime?            @map("valid_from")
+  validUntil      DateTime?            @map("valid_until")
+  evidenceText    String               @map("evidence_text")
+  evidenceStart   Int                  @map("evidence_start")
+  evidenceEnd     Int                  @map("evidence_end")
+  entities        ClaimEntity[]
+  locations       ClaimLocation[]
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  @@index([sourceArticleId, createdAt])
+  @@index([extractionRunId])
+  @@index([claimType, occurredAt])
+  @@map("claims")
+}
+
+model ClaimEntity {
+  id             String          @id @default(uuid()) @db.Uuid
+  claimId        String          @map("claim_id") @db.Uuid
+  claim          Claim           @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  entityType     ClaimEntityType @map("entity_type")
+  name           String
+  normalizedName String?         @map("normalized_name")
+  role           String?
+  confidence     Decimal?        @db.Decimal(4, 3)
+  createdAt      DateTime        @default(now()) @map("created_at")
+
+  @@index([claimId])
+  @@index([entityType, name])
+  @@map("claim_entities")
+}
+
+model ClaimLocation {
+  id         String   @id @default(uuid()) @db.Uuid
+  claimId    String   @map("claim_id") @db.Uuid
+  claim      Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  name       String
+  country    String?
+  region     String?
+  city       String?
+  confidence Decimal? @db.Decimal(4, 3)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([claimId])
+  @@index([country, name])
+  @@map("claim_locations")
 }
 
 model SourceCollectionRun {

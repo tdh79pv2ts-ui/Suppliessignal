@@ -56,6 +56,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.53.0
         version: 2.112.2
+      '@suppliesignal/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@suppliesignal/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -143,7 +146,11 @@ importers:
         specifier: ^3.4.17
         version: 3.4.19(tsx@4.23.12)
 
-  packages/ai: {}
+  packages/ai:
+    dependencies:
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
 
   packages/db:
     dependencies:

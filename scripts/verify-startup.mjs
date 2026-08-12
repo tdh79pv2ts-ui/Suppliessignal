@@ -65,4 +65,9 @@ await withDisposablePostgres(async ({ env }) => {
   worker.kill('SIGTERM');
   await new Promise((resolve) => worker.once('exit', resolve));
   console.log('Source collection worker startup verified');
+  const extractionWorker = spawn(process.execPath, ['apps/api/dist/apps/api/src/extraction-worker.js'], { env: { ...apiEnv, AI_EXTRACTION_ENABLED: 'false' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  extractionWorker.stdout.pipe(process.stdout); extractionWorker.stderr.pipe(process.stderr);
+  await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,500);extractionWorker.once('exit',(code)=>{clearTimeout(timer);reject(new Error(`Extraction worker exited early with code ${code}`));});});
+  extractionWorker.kill('SIGTERM'); await new Promise((resolve)=>extractionWorker.once('exit',resolve));
+  console.log('Extraction worker startup verified (AI disabled, no key required)');
 });

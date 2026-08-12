@@ -7,3 +7,5 @@ Run migrations with `pnpm db:migrate`, seed with `pnpm db:seed`, and inspect loc
 Phase 2 adds `suppliers`, `factories`, `products`, `materials`, `routes`, and global `ports`, plus explicit join tables. Customer-owned join rows carry `customer_id` and use composite foreign keys so both endpoints must belong to the same tenant. Later migrations add intelligence entities only in their approved phases.
 
 Phase 3 adds global `sources`, `source_articles`, and `source_collection_runs`. They intentionally have no `customer_id`. Original URLs are immutable evidence fields; canonical URLs, URL hashes, content hashes, raw text and normalized text remain distinct. Unique source/external-ID and source/URL-hash constraints support idempotency without cross-publisher event clustering.
+
+Phase 4 adds global `article_extraction_runs`, `claims`, `claim_entities`, and `claim_locations`. Runs preserve provider/model/prompt/schema/input versions and usage. Claims carry verified evidence offsets and retain direct SourceArticle provenance. Extracted entities are not customer Supplier/Factory records.

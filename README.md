@@ -1,6 +1,6 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, and global Phase 3 source intelligence layer. AI extraction, claims, events, exposure scoring, review workflows, and alerts remain explicitly not configured.
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, global source intelligence, and Phase 4 schema-validated claim extraction. Events, exposure scoring, review workflows, and alerts remain explicitly not configured.
 
 ## Architecture
 
@@ -9,7 +9,8 @@ SupplySignal is a customer-specific, evidence-first supply-chain intelligence pl
 - `packages/db` — Prisma client boundary
 - `packages/shared` — shared Zod schemas and TypeScript contracts
 - `packages/ingestion` — deterministic RSS/Atom collection, URL/text normalization, hashing, and SSRF-safe network boundary
-- `packages/ai`, `packages/scoring` — explicit future-phase placeholders
+- `packages/ai` — versioned claim schema/prompt and injectable OpenAI/fake provider boundary
+- `packages/scoring` — explicit future-phase placeholder
 - `prisma` — PostgreSQL schema, migration, and development seed
 - `tests` — unit and integration tests
 
@@ -57,6 +58,7 @@ pnpm db:migrate      # apply/create development migrations
 pnpm db:seed         # seed the fictional Phase 1 customer/user
 pnpm db:verify-migrations # clean and Phase 2→3 disposable upgrade verification
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
+pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process
 ```
 
 ## Production configuration
@@ -65,4 +67,4 @@ Use a managed PostgreSQL database, set `NODE_ENV=production`, configure exact `W
 
 ## Phase status
 
-The customer graph and global source intelligence layer are available. Source articles preserve provenance and are not interpreted for customers. The exact next task after approval is **Phase 4 — schema-validated claim extraction from SourceArticles**, without events or exposure matching.
+The customer graph, global source intelligence, and traceable claims layer are available. Claims remain global derived evidence and are not interpreted for customers. The exact next task after approval is **Phase 5 — event construction and cross-source evidence aggregation**, without customer exposure matching.
