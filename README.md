@@ -4,6 +4,8 @@ SupplySignal is a customer-specific, evidence-first supply-chain intelligence pl
 
 ## Architecture
 
+Phase documentation includes [the extraction validation POC](docs/extraction-validation-poc.md).
+
 - `apps/web` — React, TypeScript, Vite, Tailwind application shell
 - `apps/api` — Express REST API with structured logging and server-side authorization
 - `packages/db` — Prisma client boundary

@@ -10,3 +10,4 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   if (!response.ok) throw new ApiRequestError(payload.error?.code ?? 'REQUEST_FAILED', payload.error?.message ?? 'Request failed', response.status);
   return payload.data as T;
 }
+export async function apiDownload(path:string,filename:string):Promise<void>{const token=(await supabase?.auth.getSession())?.data.session?.access_token;const response=await fetch(`${apiBase}${path}`,{headers:{...(token?{authorization:`Bearer ${token}`}:{})}});if(!response.ok)throw new ApiRequestError('DOWNLOAD_FAILED','Export failed',response.status);const url=URL.createObjectURL(await response.blob());const anchor=document.createElement('a');anchor.href=url;anchor.download=filename;anchor.click();URL.revokeObjectURL(url);}

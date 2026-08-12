@@ -24,6 +24,8 @@ Claims, extracted entities, and locations are global derived data. They never mu
 
 ## Security decisions
 
+Phase 4.5 is an evaluation-only layer above immutable Phase 4 extraction history. It freezes explicit articles to exact extraction runs and stores human assessments separately. Deterministic metrics do not create events, risk, alerts, or customer relationships.
+
 - Helmet security headers and exact-origin CORS are enabled.
 - JSON bodies are limited to 1 MB.
 - Authorization headers and common secret fields are redacted from structured logs.

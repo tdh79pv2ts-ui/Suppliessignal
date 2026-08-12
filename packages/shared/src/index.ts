@@ -4,3 +4,4 @@ export * from './types.js';
 export * from './supply-chain.js';
 export * from './source-intelligence.js';
 export * from './ai-extraction.js';
+export * from './poc-evaluation.js';

@@ -145,12 +145,53 @@ enum ClaimEntityType {
   OTHER
 }
 
+enum PocDatasetStatus {
+  DRAFT
+  RUNNING
+  REVIEWING
+  COMPLETED
+}
+
+enum PocArticleStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum EvaluationScore {
+  CORRECT
+  PARTIALLY_CORRECT
+  INCORRECT
+  NOT_APPLICABLE
+}
+
+enum EvaluationFailureReason {
+  HALLUCINATION
+  MISINTERPRETATION
+  NEGATION_ERROR
+  FORECAST_OBSERVED_ERROR
+  DATE_ERROR
+  ENTITY_ERROR
+  LOCATION_ERROR
+  CLAIM_TOO_BROAD
+  CLAIM_TOO_FRAGMENTED
+  MISSING_CLAIM
+  IRRELEVANT_CLAIM
+  INSUFFICIENT_ARTICLE_TEXT
+  TRUNCATION
+  SOURCE_AMBIGUITY
+  OTHER
+}
+
 model User {
   id          String               @id @db.Uuid
   email       String               @unique
   name        String?
   role        UserRole             @default(CUSTOMER)
   memberships CustomerMembership[]
+  claimEvaluations ClaimEvaluation[]
+  articleEvaluations ArticleEvaluation[]
   createdAt   DateTime             @default(now()) @map("created_at")
   updatedAt   DateTime             @updatedAt @map("updated_at")
 
@@ -450,6 +491,7 @@ model SourceArticle {
   extractionRuns ArticleExtractionRun[]
   extractionLease ArticleExtractionLease?
   claims         Claim[]
+  pocEvaluationArticles PocEvaluationArticle[]
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
 
@@ -492,9 +534,11 @@ model ArticleExtractionRun {
   errorCode         String?             @map("error_code")
   errorMessage      String?             @map("error_message")
   claims            Claim[]
+  pocEvaluationArticles PocEvaluationArticle[]
   createdAt         DateTime            @default(now()) @map("created_at")
 
   @@index([sourceArticleId, startedAt])
+  @@unique([id, sourceArticleId])
   @@index([status, startedAt])
   @@map("article_extraction_runs")
 }
@@ -517,6 +561,7 @@ model Claim {
   evidenceEnd     Int                  @map("evidence_end")
   entities        ClaimEntity[]
   locations       ClaimLocation[]
+  evaluations     ClaimEvaluation[]
   createdAt       DateTime             @default(now()) @map("created_at")
   updatedAt       DateTime             @updatedAt @map("updated_at")
 
@@ -524,6 +569,91 @@ model Claim {
   @@index([extractionRunId])
   @@index([claimType, occurredAt])
   @@map("claims")
+}
+
+model PocEvaluationDataset {
+  id                         String           @id @default(uuid()) @db.Uuid
+  name                       String
+  description                String?
+  status                     PocDatasetStatus @default(DRAFT)
+  provider                   String?
+  model                      String?
+  promptVersion              String?          @map("prompt_version")
+  schemaVersion              String?          @map("schema_version")
+  thresholds                 Json
+  minimumArticlesReviewed    Int              @default(100) @map("minimum_articles_reviewed")
+  minimumClaimReviewPercent  Decimal          @default(90) @map("minimum_claim_review_percent") @db.Decimal(5, 2)
+  articles                   PocEvaluationArticle[]
+  claimEvaluations           ClaimEvaluation[]
+  createdAt                  DateTime         @default(now()) @map("created_at")
+  updatedAt                  DateTime         @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@map("poc_evaluation_datasets")
+}
+
+model PocEvaluationArticle {
+  id                String               @id @default(uuid()) @db.Uuid
+  datasetId         String               @map("dataset_id") @db.Uuid
+  sourceArticleId   String               @map("source_article_id") @db.Uuid
+  extractionRunId   String?              @map("extraction_run_id") @db.Uuid
+  status            PocArticleStatus     @default(PENDING)
+  errorCode         String?              @map("error_code")
+  errorMessage      String?              @map("error_message")
+  dataset           PocEvaluationDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  sourceArticle     SourceArticle        @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  extractionRun     ArticleExtractionRun? @relation(fields: [extractionRunId, sourceArticleId], references: [id, sourceArticleId], onDelete: Restrict)
+  evaluation        ArticleEvaluation?
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
+
+  @@unique([datasetId, sourceArticleId])
+  @@index([datasetId, status])
+  @@index([extractionRunId])
+  @@map("poc_evaluation_articles")
+}
+
+model ClaimEvaluation {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  datasetId           String                  @map("dataset_id") @db.Uuid
+  claimId             String                  @map("claim_id") @db.Uuid
+  reviewerUserId      String                  @map("reviewer_user_id") @db.Uuid
+  claimScore          EvaluationScore         @map("claim_score")
+  evidenceScore       EvaluationScore         @map("evidence_score")
+  entityScore         EvaluationScore         @map("entity_score")
+  locationScore       EvaluationScore         @map("location_score")
+  dateScore           EvaluationScore         @map("date_score")
+  assertionScore      EvaluationScore         @map("assertion_score")
+  unsupported         Boolean                 @default(false)
+  failureReason       EvaluationFailureReason? @map("failure_reason")
+  notes               String?
+  dataset             PocEvaluationDataset    @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  claim               Claim                   @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  reviewer            User                    @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+
+  @@unique([datasetId, claimId])
+  @@index([reviewerUserId])
+  @@map("claim_evaluations")
+}
+
+model ArticleEvaluation {
+  id                  String               @id @default(uuid()) @db.Uuid
+  datasetArticleId    String               @unique @map("dataset_article_id") @db.Uuid
+  reviewerUserId      String               @map("reviewer_user_id") @db.Uuid
+  expectedRelevant    Boolean              @map("expected_relevant")
+  extractedRelevant   Boolean?             @map("extracted_relevant")
+  missedClaims        Int                  @default(0) @map("missed_claims")
+  missedClaimNotes    String?              @map("missed_claim_notes")
+  notes               String?
+  datasetArticle      PocEvaluationArticle @relation(fields: [datasetArticleId], references: [id], onDelete: Restrict)
+  reviewer            User                 @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+
+  @@index([reviewerUserId])
+  @@map("article_evaluations")
 }
 
 model ClaimEntity {

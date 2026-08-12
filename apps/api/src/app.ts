@@ -11,6 +11,7 @@ import { createLogger } from './logger.js';
 import { createSupplyChainRouter, supplyChainErrorHandler } from './routes/supply-chain.js';
 import { createSourceIntelligenceRouter } from './routes/source-intelligence.js';
 import { createExtractionRouter } from './routes/extraction.js';
+import { createPocEvaluationRouter } from './routes/poc-evaluation.js';
 
 type AppOptions = {
   env: ServerEnv;
@@ -69,6 +70,7 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
   app.use('/api', createSupplyChainRouter(resolveUser));
   app.use('/api', createSourceIntelligenceRouter(resolveUser));
   app.use('/api', createExtractionRouter(resolveUser));
+  app.use('/api', createPocEvaluationRouter(resolveUser));
   app.use(supplyChainErrorHandler);
 
   app.use((_request, response) => {

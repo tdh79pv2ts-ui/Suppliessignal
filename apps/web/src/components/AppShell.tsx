@@ -7,6 +7,7 @@ import {
   RadioTower,
   Settings,
   ShieldCheck,
+  FlaskConical,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/auth';
@@ -28,6 +29,7 @@ export function AppShell() {
           { label: 'Sources', to: '/sources', icon: RadioTower },
           { label: 'Articles', to: '/source-articles', icon: FileCheck2 },
           { label: 'Claims', to: '/claims', icon: FileCheck2 },
+          { label: 'Extraction POC', to: '/poc/extraction', icon: FlaskConical },
           ...baseNavigation.slice(2),
         ]
       : baseNavigation;

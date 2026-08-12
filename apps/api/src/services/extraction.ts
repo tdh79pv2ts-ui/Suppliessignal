@@ -14,6 +14,10 @@ export class ExtractionService {
     if (!process.env.OPENAI_API_KEY) throw new ServiceError('AI_EXTRACTION_DISABLED', 'AI extraction is not configured', 409);
     return new OpenAIExtractionProvider(process.env.OPENAI_EXTRACTION_MODEL ?? 'gpt-5-mini', process.env.OPENAI_API_KEY);
   }
+  configuration() {
+    const provider = this.configuredProvider();
+    return { provider: provider.name, model: provider.model, promptVersion: CLAIM_EXTRACTION_PROMPT_VERSION, schemaVersion: CLAIM_EXTRACTION_SCHEMA_VERSION };
+  }
   async extract(articleId: string, reprocess = false) {
     const article = await db.sourceArticle.findUnique({ where: { id: articleId }, include: { source: true } });
     if (!article) throw new ServiceError('ARTICLE_NOT_FOUND', 'Source article not found', 404);

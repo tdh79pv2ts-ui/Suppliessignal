@@ -1,5 +1,7 @@
 # Database
 
+Phase 4.5 adds `PocEvaluationDataset`, `PocEvaluationArticle`, `ArticleEvaluation`, and `ClaimEvaluation`. A composite foreign key on extraction run and source article guarantees that a frozen run belongs to its selected article. Dataset membership is unique and application-immutable after draft.
+
 Phase 1 contains `customers`, `users`, and `customer_memberships`. User IDs intentionally match Supabase Auth UUIDs. The membership join model provides a database-backed many-to-many tenant boundary. Customer users and reviewers can access only customers represented by memberships; administrators may operate platform-wide.
 
 Run migrations with `pnpm db:migrate`, seed with `pnpm db:seed`, and inspect locally with `pnpm db:studio`. The seed customer and user are fictional. No password is stored in PostgreSQL.
