@@ -93,7 +93,7 @@ await withDisposablePostgres(async ({ env, bin, port, databaseName }) => {
       '-v',
       'ON_ERROR_STOP=1',
       '-c',
-      `SELECT EXISTS(SELECT 1 FROM customers WHERE id='${customerId}') AS customer_preserved, EXISTS(SELECT 1 FROM customer_memberships WHERE user_id='${userId}' AND customer_id='${customerId}') AS membership_preserved, EXISTS(SELECT 1 FROM supplier_products WHERE supplier_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc') AS graph_preserved, EXISTS(SELECT 1 FROM source_articles WHERE id='ffffffff-ffff-4fff-8fff-ffffffffffff') AS article_preserved, EXISTS(SELECT 1 FROM source_collection_runs WHERE id='99999999-9999-4999-8999-999999999999') AS run_preserved, to_regclass('public.article_extraction_runs') IS NOT NULL AS extraction_runs_available, to_regclass('public.claims') IS NOT NULL AS claims_available;`,
+      `SELECT EXISTS(SELECT 1 FROM customers WHERE id='${customerId}') AS customer_preserved, EXISTS(SELECT 1 FROM customer_memberships WHERE user_id='${userId}' AND customer_id='${customerId}') AS membership_preserved, EXISTS(SELECT 1 FROM supplier_products WHERE supplier_id='cccccccc-cccc-4ccc-8ccc-cccccccccccc') AS graph_preserved, EXISTS(SELECT 1 FROM source_articles WHERE id='ffffffff-ffff-4fff-8fff-ffffffffffff') AS article_preserved, EXISTS(SELECT 1 FROM source_collection_runs WHERE id='99999999-9999-4999-8999-999999999999') AS run_preserved, to_regclass('public.article_extraction_runs') IS NOT NULL AS extraction_runs_available, to_regclass('public.claims') IS NOT NULL AS claims_available, to_regclass('public.article_extraction_leases') IS NOT NULL AS extraction_leases_available;`,
     ],
     { env },
   );

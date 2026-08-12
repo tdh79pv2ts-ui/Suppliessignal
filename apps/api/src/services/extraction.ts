@@ -1,8 +1,9 @@
 import { db, type Prisma } from '@suppliesignal/db';
+import { randomUUID } from 'node:crypto';
 import { CLAIM_EXTRACTION_PROMPT_VERSION, CLAIM_EXTRACTION_SCHEMA_VERSION, OpenAIExtractionProvider, extractClaims, type ExtractionProvider } from '@suppliesignal/ai';
 import { ServiceError } from './errors.js';
 
-const active = new Set<string>();
+const EXTRACTION_LEASE_MILLISECONDS = 5 * 60 * 1000;
 type Page = { page: number; pageSize: number };
 const page = (p: Page, total: number) => ({ page: p.page, pageSize: p.pageSize, total, totalPages: Math.ceil(total / p.pageSize) });
 export class ExtractionService {
@@ -14,7 +15,6 @@ export class ExtractionService {
     return new OpenAIExtractionProvider(process.env.OPENAI_EXTRACTION_MODEL ?? 'gpt-5-mini', process.env.OPENAI_API_KEY);
   }
   async extract(articleId: string, reprocess = false) {
-    if (active.has(articleId)) throw new ServiceError('EXTRACTION_ALREADY_RUNNING', 'Article extraction is already running', 409);
     const article = await db.sourceArticle.findUnique({ where: { id: articleId }, include: { source: true } });
     if (!article) throw new ServiceError('ARTICLE_NOT_FOUND', 'Source article not found', 404);
     const text = article.normalizedText ?? article.excerpt;
@@ -24,7 +24,10 @@ export class ExtractionService {
       const existing = await db.articleExtractionRun.findFirst({ where: { sourceArticleId: articleId, status: 'COMPLETED', provider: provider.name, model: provider.model, promptVersion: CLAIM_EXTRACTION_PROMPT_VERSION, schemaVersion: CLAIM_EXTRACTION_SCHEMA_VERSION }, orderBy: { completedAt: 'desc' } });
       if (existing) return this.get(existing.id);
     }
-    active.add(articleId);
+    const ownerToken=randomUUID();
+    const acquired=await db.$queryRaw<{owner_token:string}[]>`INSERT INTO article_extraction_leases (source_article_id, owner_token, lease_expires_at, acquired_at) VALUES (${articleId}::uuid, ${ownerToken}::uuid, CURRENT_TIMESTAMP + (${EXTRACTION_LEASE_MILLISECONDS} * INTERVAL '1 millisecond'), CURRENT_TIMESTAMP) ON CONFLICT (source_article_id) DO UPDATE SET owner_token = EXCLUDED.owner_token, lease_expires_at = EXCLUDED.lease_expires_at, acquired_at = EXCLUDED.acquired_at WHERE article_extraction_leases.lease_expires_at <= CURRENT_TIMESTAMP RETURNING owner_token`;
+    if(acquired.length===0)throw new ServiceError('EXTRACTION_ALREADY_RUNNING','Article extraction is already running',409);
+    await db.articleExtractionRun.updateMany({where:{sourceArticleId:articleId,status:'PROCESSING',completedAt:null},data:{status:'FAILED',completedAt:new Date(),errorCode:'EXTRACTION_LEASE_EXPIRED',errorMessage:'Previous extraction lease expired'}});
     const run = await db.articleExtractionRun.create({ data: { sourceArticleId: articleId, provider: provider.name, model: provider.model, promptVersion: CLAIM_EXTRACTION_PROMPT_VERSION, schemaVersion: CLAIM_EXTRACTION_SCHEMA_VERSION, inputHash: 'pending', inputCharacters: text.length } });
     const started = Date.now();
     try {
@@ -42,7 +45,7 @@ export class ExtractionService {
       const candidate=(error as {code?:string}).code; const code = candidate?.startsWith('AI_') ? candidate : error instanceof Error && ['INVALID_AI_OUTPUT','INVALID_EVIDENCE'].includes(error.message) ? error.message : 'EXTRACTION_FAILED';
       await db.articleExtractionRun.update({ where: { id: run.id }, data: { status: 'FAILED', completedAt: new Date(), errorCode: code, errorMessage: 'Extraction failed safely' } });
       throw new ServiceError(code, 'Article extraction failed', 502);
-    } finally { active.delete(articleId); }
+    } finally { await db.articleExtractionLease.deleteMany({where:{sourceArticleId:articleId,ownerToken}}); }
   }
   async get(id: string) { const item = await db.articleExtractionRun.findUnique({ where: { id }, include: { sourceArticle: { include: { source: true } }, claims: { include: { entities: true, locations: true } } } }); if (!item) throw new ServiceError('EXTRACTION_NOT_FOUND', 'Extraction run not found', 404); return item; }
   async articleRuns(articleId: string) { return db.articleExtractionRun.findMany({ where: { sourceArticleId: articleId }, orderBy: { startedAt: 'desc' }, include: { claims: { include: { entities: true, locations: true } } } }); }

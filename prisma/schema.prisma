@@ -448,6 +448,7 @@ model SourceArticle {
   urlHash        String              @map("url_hash")
   status         SourceArticleStatus @default(COLLECTED)
   extractionRuns ArticleExtractionRun[]
+  extractionLease ArticleExtractionLease?
   claims         Claim[]
   createdAt      DateTime            @default(now()) @map("created_at")
   updatedAt      DateTime            @updatedAt @map("updated_at")
@@ -457,6 +458,17 @@ model SourceArticle {
   @@index([sourceId, contentHash])
   @@index([collectedAt, status])
   @@map("source_articles")
+}
+
+model ArticleExtractionLease {
+  sourceArticleId String        @id @map("source_article_id") @db.Uuid
+  sourceArticle   SourceArticle @relation(fields: [sourceArticleId], references: [id], onDelete: Cascade)
+  ownerToken      String        @map("owner_token") @db.Uuid
+  leaseExpiresAt  DateTime      @map("lease_expires_at")
+  acquiredAt      DateTime      @default(now()) @map("acquired_at")
+
+  @@index([leaseExpiresAt])
+  @@map("article_extraction_leases")
 }
 
 model ArticleExtractionRun {

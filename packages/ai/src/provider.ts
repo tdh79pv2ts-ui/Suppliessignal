@@ -4,6 +4,7 @@ import { CLAIM_EXTRACTION_PROMPT } from './prompt.js';
 export type ExtractionInput = { title: string; text: string; publishedAt?: string; sourceName: string };
 export type ProviderResult = { output: unknown; inputTokens?: number; outputTokens?: number };
 export interface ExtractionProvider { readonly name: string; readonly model: string; extract(input: ExtractionInput): Promise<ProviderResult>; }
+export class ExtractionInputError extends Error { readonly code = 'NO_EXTRACTABLE_CONTENT'; constructor() { super('Extraction input contains no text'); } }
 export class AIProviderError extends Error { constructor(public readonly code: 'AI_TIMEOUT'|'AI_RATE_LIMITED'|'AI_PROVIDER_ERROR', message: string, public readonly transient: boolean) { super(message); } }
 export class FakeExtractionProvider implements ExtractionProvider {
   readonly name = 'fake'; readonly model = 'deterministic-fixture';
