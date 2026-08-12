@@ -273,6 +273,14 @@ enum EventMatchDecision {
   AMBIGUOUS
 }
 
+enum ClaimSignal {
+  AFFIRMS_EVENT
+  DENIES_EVENT
+  RESOLUTION_SIGNAL
+  CANCELLATION_SIGNAL
+  NEUTRAL
+}
+
 enum ClaimEventProcessingStatus {
   PENDING
   PROCESSING
@@ -687,6 +695,7 @@ model Event {
   firstSeenAt            DateTime           @map("first_seen_at")
   lastSeenAt             DateTime           @map("last_seen_at")
   fingerprint            String             @unique
+  policyVersion          String             @default("1.1") @map("policy_version")
   conflictState          EventConflictState @default(NONE) @map("conflict_state")
   conflictReason         String?            @map("conflict_reason")
   supportingClaimCount   Int                @default(0) @map("supporting_claim_count")
@@ -711,6 +720,7 @@ model EventClaim {
   claim         Claim              @relation(fields: [claimId], references: [id], onDelete: Restrict)
   matchDecision EventMatchDecision @map("match_decision")
   matchReason   String             @map("match_reason")
+  claimSignal   ClaimSignal        @default(AFFIRMS_EVENT) @map("claim_signal")
   attachedAt    DateTime           @default(now()) @map("attached_at")
 
   @@id([eventId, claimId])

@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { db } from '@suppliesignal/db';
-import { eventIntelligenceService } from './services/event-intelligence.js';
+import {
+  eventIntelligenceService,
+  processingMetadata,
+} from './services/event-intelligence.js';
+import { addEventProcessingMetrics } from './services/event-worker-metrics.js';
 const batchSize = Math.min(
   25,
   Math.max(1, Number(process.env.EVENT_BATCH_SIZE ?? 5)),
@@ -20,27 +24,14 @@ console.info(
 async function tick() {
   if (!enabled || running) return;
   running = true;
-  const metrics = {
-    claimsProcessed: 0,
-    claimsSkipped: 0,
-    processingFailures: 0,
-    eventsCreated: 0,
-    claimsAttached: 0,
-    ambiguousMatches: 0,
-    conflictsDetected: 0,
-  };
+  let metrics = processingMetadata();
   const started = Date.now();
   try {
     const claims = await eventIntelligenceService.pendingClaims(batchSize);
     for (const claim of claims)
       try {
         const result = await eventIntelligenceService.processClaim(claim.id);
-        if ('status' in result && result.status === 'SKIPPED')
-          metrics.claimsSkipped++;
-        else {
-          metrics.claimsProcessed++;
-          metrics.claimsAttached++;
-        }
+        metrics = addEventProcessingMetrics(metrics, result);
       } catch (error) {
         metrics.processingFailures++;
         console.error(

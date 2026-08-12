@@ -65,6 +65,59 @@ export const eventMatchDecisionSchema = z.enum([
   'MATCH_EXISTING',
   'AMBIGUOUS',
 ]);
+export const claimSignalSchema = z.enum([
+  'AFFIRMS_EVENT',
+  'DENIES_EVENT',
+  'RESOLUTION_SIGNAL',
+  'CANCELLATION_SIGNAL',
+  'NEUTRAL',
+]);
+export type ClaimSignalValue = z.infer<typeof claimSignalSchema>;
+
+export const EVENT_POLICY_VERSION = '1.1';
+export const eventPolicySchema = z.object({
+  version: z.string().trim().min(1),
+  fingerprintVersion: z.string().trim().min(1),
+  minimumClaimConfidence: z.number().min(0).max(1),
+  temporalMatchWindowDays: z.number().int().min(0).max(30),
+  confidence: z.object({
+    independentSourceBoost: z.number().min(0).max(1),
+    maximumSourceBoost: z.number().min(0).max(1),
+    additionalArticleBoost: z.number().min(0).max(1),
+    maximumArticleBoost: z.number().min(0).max(1),
+    conflictPenalty: z.number().min(0).max(1),
+    maximumConfidence: z.number().min(0).max(1),
+  }),
+});
+export type EventPolicy = z.infer<typeof eventPolicySchema>;
+export const DEFAULT_EVENT_POLICY: EventPolicy = Object.freeze({
+  version: EVENT_POLICY_VERSION,
+  fingerprintVersion: '2',
+  minimumClaimConfidence: 0.6,
+  temporalMatchWindowDays: 3,
+  confidence: {
+    independentSourceBoost: 0.05,
+    maximumSourceBoost: 0.15,
+    additionalArticleBoost: 0.02,
+    maximumArticleBoost: 0.06,
+    conflictPenalty: 0.2,
+    maximumConfidence: 0.99,
+  },
+});
+export function createEventPolicy(
+  overrides: Partial<Omit<EventPolicy, 'confidence'>> & {
+    confidence?: Partial<EventPolicy['confidence']>;
+  } = {},
+): EventPolicy {
+  return eventPolicySchema.parse({
+    ...DEFAULT_EVENT_POLICY,
+    ...overrides,
+    confidence: {
+      ...DEFAULT_EVENT_POLICY.confidence,
+      ...overrides.confidence,
+    },
+  });
+}
 export const eventIdSchema = z.object({ eventId: z.string().uuid() });
 export const processClaimParamsSchema = z.object({
   claimId: z.string().uuid(),
@@ -207,8 +260,10 @@ export function buildEventFingerprint(input: {
   primaryEntityKey?: string | null;
   primaryLocationKey?: string | null;
   eventDate?: Date | null;
+  fingerprintVersion?: string;
 }) {
   return [
+    `v${input.fingerprintVersion ?? DEFAULT_EVENT_POLICY.fingerprintVersion}`,
     eventTypes.includes(input.eventType) ? input.eventType : 'OTHER',
     input.assertionMode,
     input.primaryEntityKey ?? 'no-entity',
@@ -250,6 +305,7 @@ export function matchEvent(
     locationKeys: string[];
   },
   candidates: EventCandidate[],
+  policy: EventPolicy = DEFAULT_EVENT_POLICY,
 ): {
   decision: EventMatchDecisionValue;
   eventId?: string;
@@ -277,7 +333,7 @@ export function matchEvent(
       input.eventDate &&
       candidateDate &&
       Math.abs(input.eventDate.getTime() - candidateDate.getTime()) >
-        3 * 86_400_000
+        policy.temporalMatchWindowDays * 86_400_000
     )
       return false;
     if (Boolean(input.eventDate) !== Boolean(candidateDate)) return false;
@@ -313,19 +369,22 @@ export function matchEvent(
   };
 }
 
-export function claimEligibility(input: {
-  extractionStatus: string;
-  claimType: string;
-  confidence: number;
-  evidenceText: string;
-  entityCount: number;
-  locationCount: number;
-}) {
+export function claimEligibility(
+  input: {
+    extractionStatus: string;
+    claimType: string;
+    confidence: number;
+    evidenceText: string;
+    entityCount: number;
+    locationCount: number;
+  },
+  policy: EventPolicy = DEFAULT_EVENT_POLICY,
+) {
   if (input.extractionStatus !== 'COMPLETED')
     return { eligible: false, code: 'EXTRACTION_NOT_SUCCESSFUL' } as const;
   if (!claimTypeToEventType(input.claimType))
     return { eligible: false, code: 'UNSUPPORTED_CLAIM_TYPE' } as const;
-  if (input.confidence < 0.6)
+  if (input.confidence < policy.minimumClaimConfidence)
     return { eligible: false, code: 'CLAIM_CONFIDENCE_TOO_LOW' } as const;
   if (!input.evidenceText.trim())
     return { eligible: false, code: 'CLAIM_EVIDENCE_REQUIRED' } as const;
@@ -370,21 +429,29 @@ export type ConfidenceClaim = {
   sourceId: string;
   conflicting: boolean;
 };
-export function aggregateEventConfidence(claims: ConfidenceClaim[]): number {
+export function aggregateEventConfidence(
+  claims: ConfidenceClaim[],
+  policy: EventPolicy = DEFAULT_EVENT_POLICY,
+): number {
   if (!claims.length) return 0;
   const strongest = Math.max(...claims.map((claim) => claim.confidence));
   const sources = new Set(claims.map((claim) => claim.sourceId)).size;
   const articles = new Set(claims.map((claim) => claim.articleId)).size;
-  const sourceBoost = Math.min(0.15, Math.max(0, sources - 1) * 0.05);
-  const sameSourceArticleBoost = Math.min(
-    0.06,
-    Math.max(0, articles - sources) * 0.02,
+  const sourceBoost = Math.min(
+    policy.confidence.maximumSourceBoost,
+    Math.max(0, sources - 1) * policy.confidence.independentSourceBoost,
   );
-  const conflictPenalty = claims.some((claim) => claim.conflicting) ? 0.2 : 0;
+  const sameSourceArticleBoost = Math.min(
+    policy.confidence.maximumArticleBoost,
+    Math.max(0, articles - sources) * policy.confidence.additionalArticleBoost,
+  );
+  const conflictPenalty = claims.some((claim) => claim.conflicting)
+    ? policy.confidence.conflictPenalty
+    : 0;
   return Math.max(
     0,
     Math.min(
-      0.99,
+      policy.confidence.maximumConfidence,
       Number(
         (
           strongest +
@@ -396,10 +463,28 @@ export function aggregateEventConfidence(claims: ConfidenceClaim[]): number {
     ),
   );
 }
-const conflictPattern =
-  /\b(cancel(?:led|ed)|resolved|reopened|remains? (?:open|operational)|no (?:strike|closure|disruption))\b/i;
-export function claimSignalsConflict(statement: string): boolean {
-  return conflictPattern.test(statement);
+const deniedReport =
+  /\b(?:denied|rejected|disputed)\s+(?:the\s+)?(?:reports?|claims?|allegations?)\s+(?:that\s+)?[^.!?]{0,120}\b(?:cancelled|canceled|resolved|closed|disrupted)\b/i;
+const negatedCancellation =
+  /\b(?:not|never)\s+(?:been\s+)?(?:cancelled|canceled)\b|\bno\s+cancellation\b/i;
+const denial =
+  /\bno\s+(?:strike|closure|disruption)\s+(?:occurred|happened|took\s+place)\b|\bremains?\s+(?:open|operational)\b/i;
+const resolution =
+  /\b(?:reopened|resumed|restored)\b[^.!?]{0,100}\b(?:after|following)\b|\b(?:disruption|strike|closure)\s+(?:has\s+)?(?:ended|resolved)\b/i;
+const cancellation =
+  /\b(?:strike|closure|disruption|event|plan)\b[^.!?]{0,100}\b(?:was|has\s+been|is)\s+(?:cancelled|canceled)\b/i;
+export function classifyClaimSignal(statement: string): ClaimSignalValue {
+  const normalized = statement.normalize('NFKC').replace(/\s+/g, ' ').trim();
+  if (!normalized) return 'NEUTRAL';
+  if (deniedReport.test(normalized)) return 'NEUTRAL';
+  if (negatedCancellation.test(normalized)) return 'AFFIRMS_EVENT';
+  if (denial.test(normalized)) return 'DENIES_EVENT';
+  if (resolution.test(normalized)) return 'RESOLUTION_SIGNAL';
+  if (cancellation.test(normalized)) return 'CANCELLATION_SIGNAL';
+  return 'AFFIRMS_EVENT';
+}
+export function supportingClaimsConflict(signals: ClaimSignalValue[]): boolean {
+  return signals.includes('AFFIRMS_EVENT') && signals.includes('DENIES_EVENT');
 }
 
 const transitions: Record<EventStatusValue, EventStatusValue[]> = {

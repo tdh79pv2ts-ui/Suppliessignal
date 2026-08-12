@@ -1,6 +1,7 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import { db } from '../../packages/db/src/index';
 import { EventIntelligenceService } from '../../apps/api/src/services/event-intelligence';
+import { createEventPolicy } from '../../packages/shared/src/event-intelligence';
 const raw = process.env.TEST_DATABASE_URL;
 if (
   !raw ||
@@ -151,6 +152,8 @@ describe.sequential('Phase 5 Event intelligence with PostgreSQL', () => {
     expect(second.id).toBe(first.id);
     expect(await db.event.count({ where: { id: first.id } })).toBe(1);
     expect(await db.eventClaim.count({ where: { claimId: claim.id } })).toBe(1);
+    expect(first.processingMetadata).toMatchObject({ eventsCreated: 1 });
+    expect(second.processingMetadata).toMatchObject({ claimsProcessed: 0 });
     const detail = await service.getEvent(first.id);
     expect(detail).toMatchObject({
       supportingClaimCount: 1,
@@ -186,6 +189,9 @@ describe.sequential('Phase 5 Event intelligence with PostgreSQL', () => {
       supportingArticleCount: 2,
       supportingSourceCount: 2,
     });
+    expect(eventB.processingMetadata).toMatchObject({
+      claimsAttachedToExisting: 1,
+    });
     const fire = await claimFixture({
       claimType: 'FIRE',
       entityName: 'Corroboration Terminal',
@@ -202,7 +208,7 @@ describe.sequential('Phase 5 Event intelligence with PostgreSQL', () => {
       eventA.id,
     );
   });
-  it('represents conflicts and preserves reprocessing provenance', async () => {
+  it('stores cancellation evidence without manufacturing a conflict and preserves reprocessing provenance', async () => {
     const old = await claimFixture({
       entityName: 'Conflict Terminal',
       statement: 'Workers began a strike at Conflict Terminal in Rotterdam.',
@@ -215,10 +221,14 @@ describe.sequential('Phase 5 Event intelligence with PostgreSQL', () => {
     const same = await service.processClaim(newer.claim.id);
     expect(same.id).toBe(event.id);
     expect(same).toMatchObject({
-      conflictState: 'DETECTED',
+      conflictState: 'NONE',
       supportingClaimCount: 2,
     });
-    expect(Number(same.confidence)).toBeLessThan(0.82);
+    expect(same.claimLinks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ claimSignal: 'CANCELLATION_SIGNAL' }),
+      ]),
+    );
     expect(same.claimLinks.map((link) => link.claim.id)).toEqual(
       expect.arrayContaining([old.claim.id, newer.claim.id]),
     );
@@ -275,6 +285,7 @@ describe.sequential('Phase 5 Event intelligence with PostgreSQL', () => {
     expect(result.claimLinks[0]).toMatchObject({
       matchDecision: 'AMBIGUOUS',
     });
+    expect(result.processingMetadata).toMatchObject({ ambiguousMatches: 1 });
     expect(
       (
         await db.claimEventProcessing.findUniqueOrThrow({
@@ -282,6 +293,108 @@ describe.sequential('Phase 5 Event intelligence with PostgreSQL', () => {
         })
       ).candidateEventIds,
     ).toEqual(expect.arrayContaining(candidates.map(({ id }) => id)));
+  });
+  it('detects a genuine affirmative/denial conflict for the same candidate Event', async () => {
+    const closed = await claimFixture({
+      claimType: 'PORT_DISRUPTION',
+      entityName: 'Genuine Conflict Port',
+      locationName: 'Genuine Conflict City',
+      statement: 'Port closed.',
+      date: new Date('2026-07-01'),
+    });
+    const operational = await claimFixture({
+      claimType: 'PORT_DISRUPTION',
+      entityName: 'Genuine Conflict Port',
+      locationName: 'Genuine Conflict City',
+      statement: 'The port remains operational.',
+      date: new Date('2026-07-01'),
+    });
+    const first = await service.processClaim(closed.claim.id);
+    const second = await service.processClaim(operational.claim.id);
+    expect(second.id).toBe(first.id);
+    expect(second).toMatchObject({
+      conflictState: 'DETECTED',
+      processingMetadata: { conflictsDetected: 1 },
+    });
+    expect(second.claimLinks.map((link) => link.claimSignal)).toEqual(
+      expect.arrayContaining(['AFFIRMS_EVENT', 'DENIES_EVENT']),
+    );
+  });
+  it('preserves negation meaning and does not falsely conflict', async () => {
+    const continues = await claimFixture({
+      entityName: 'Negation Terminal',
+      locationName: 'Negation City',
+      statement: 'Strike continues.',
+      date: new Date('2026-07-04'),
+    });
+    const notCancelled = await claimFixture({
+      entityName: 'Negation Terminal',
+      locationName: 'Negation City',
+      statement: 'The strike was not cancelled.',
+      date: new Date('2026-07-04'),
+    });
+    const first = await service.processClaim(continues.claim.id);
+    const second = await service.processClaim(notCancelled.claim.id);
+    expect(second.id).toBe(first.id);
+    expect(second.conflictState).toBe('NONE');
+    expect(second.claimLinks.map((link) => link.claimSignal)).toEqual([
+      'AFFIRMS_EVENT',
+      'AFFIRMS_EVENT',
+    ]);
+  });
+  it('stores resolution evidence separately without false conflict or lifecycle mutation', async () => {
+    const disrupted = await claimFixture({
+      claimType: 'PORT_DISRUPTION',
+      entityName: 'Resolution Port',
+      locationName: 'Resolution City',
+      statement: 'Port operations were disrupted.',
+      date: new Date('2026-07-06'),
+    });
+    const reopened = await claimFixture({
+      claimType: 'PORT_DISRUPTION',
+      entityName: 'Resolution Port',
+      locationName: 'Resolution City',
+      statement: 'The port reopened after being closed.',
+      date: new Date('2026-07-06'),
+    });
+    const first = await service.processClaim(disrupted.claim.id);
+    const second = await service.processClaim(reopened.claim.id);
+    expect(second.id).toBe(first.id);
+    expect(second).toMatchObject({
+      conflictState: 'NONE',
+      status: 'DETECTED',
+    });
+    expect(second.claimLinks.map((link) => link.claimSignal)).toContain(
+      'RESOLUTION_SIGNAL',
+    );
+  });
+  it('stores the construction policy and never rewrites historic policy metadata', async () => {
+    const fixture = await claimFixture({
+      entityName: 'Policy Terminal',
+      locationName: 'Policy City',
+      confidence: 0.72,
+      date: new Date('2026-07-08'),
+    });
+    const created = await new EventIntelligenceService(
+      createEventPolicy({
+        version: 'policy-test-1',
+        fingerprintVersion: 'policy-test-1',
+        minimumClaimConfidence: 0.7,
+      }),
+    ).processClaim(fixture.claim.id);
+    expect(created.policyVersion).toBe('policy-test-1');
+    const historic = await new EventIntelligenceService(
+      createEventPolicy({
+        version: 'policy-test-2',
+        fingerprintVersion: 'policy-test-2',
+        minimumClaimConfidence: 0.5,
+      }),
+    ).processClaim(fixture.claim.id);
+    expect(historic.policyVersion).toBe('policy-test-1');
+    expect(
+      (await db.event.findUniqueOrThrow({ where: { id: created.id } }))
+        .policyVersion,
+    ).toBe('policy-test-1');
   });
   it('uses database locking so concurrent matching creates no uncontrolled duplicate', async () => {
     const a = await claimFixture({

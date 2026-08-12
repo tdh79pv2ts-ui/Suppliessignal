@@ -6,12 +6,15 @@ import {
   buildEventLockKey,
   calculateEventSeverity,
   canTransitionEventStatus,
+  classifyClaimSignal,
   claimEligibility,
-  claimSignalsConflict,
+  createEventPolicy,
   claimTypeToEventType,
   matchEvent,
   normalizeEventEntity,
   normalizeEventLocation,
+  supportingClaimsConflict,
+  type EventPolicy,
   type EventListInput,
   type EventStatusValue,
 } from '@suppliesignal/shared';
@@ -50,6 +53,12 @@ const seenAt = (claim: {
 }) => claim.sourceArticle.publishedAt ?? claim.sourceArticle.collectedAt;
 
 export class EventIntelligenceService {
+  readonly policy: EventPolicy;
+
+  constructor(policy: EventPolicy = createEventPolicy()) {
+    this.policy = policy;
+  }
+
   async processClaim(claimId: string) {
     const claim = await db.claim.findUnique({
       where: { id: claimId },
@@ -64,12 +73,19 @@ export class EventIntelligenceService {
     });
     if (!claim)
       throw new ServiceError('CLAIM_NOT_FOUND', 'Claim not found', 404);
-    if (claim.eventLinks[0]) return this.getEvent(claim.eventLinks[0].eventId);
+    if (claim.eventLinks[0]) {
+      const event = await this.getEvent(claim.eventLinks[0].eventId);
+      return {
+        ...event,
+        processingMetadata: processingMetadata(),
+      };
+    }
     if (claim.eventProcessing?.status === 'SKIPPED')
       return {
         status: 'SKIPPED',
         reason: claim.eventProcessing.errorCode,
         claimId,
+        processingMetadata: processingMetadata({ claimsSkipped: 1 }),
       };
     const ownerToken = randomUUID();
     const acquired = await db.$queryRaw<
@@ -81,14 +97,17 @@ export class EventIntelligenceService {
         'Claim event processing is already running or complete',
         409,
       );
-    const eligibility = claimEligibility({
-      extractionStatus: claim.extractionRun.status,
-      claimType: claim.claimType,
-      confidence: Number(claim.confidence),
-      evidenceText: claim.evidenceText,
-      entityCount: claim.entities.length,
-      locationCount: claim.locations.length,
-    });
+    const eligibility = claimEligibility(
+      {
+        extractionStatus: claim.extractionRun.status,
+        claimType: claim.claimType,
+        confidence: Number(claim.confidence),
+        evidenceText: claim.evidenceText,
+        entityCount: claim.entities.length,
+        locationCount: claim.locations.length,
+      },
+      this.policy,
+    );
     if (!eligibility.eligible) {
       await db.claimEventProcessing.update({
         where: { claimId },
@@ -101,7 +120,12 @@ export class EventIntelligenceService {
           errorMessage: 'Claim did not meet deterministic event eligibility',
         },
       });
-      return { status: 'SKIPPED', reason: eligibility.code, claimId };
+      return {
+        status: 'SKIPPED',
+        reason: eligibility.code,
+        claimId,
+        processingMetadata: processingMetadata({ claimsSkipped: 1 }),
+      };
     }
     const eventType = claimTypeToEventType(claim.claimType)!;
     const entities = claim.entities.map(normalizeEventEntity);
@@ -115,6 +139,7 @@ export class EventIntelligenceService {
       primaryEntityKey: entity?.normalizedKey ?? null,
       primaryLocationKey: location?.normalizedKey ?? null,
       eventDate,
+      fingerprintVersion: this.policy.fingerprintVersion,
     });
     const lockKey = buildEventLockKey({
       eventType,
@@ -127,7 +152,11 @@ export class EventIntelligenceService {
       const result = await db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT 1 AS locked FROM pg_advisory_xact_lock(hashtext(${lockKey}))`;
         const candidates = await tx.event.findMany({
-          where: { eventType, assertionMode: claim.assertionMode },
+          where: {
+            eventType,
+            assertionMode: claim.assertionMode,
+            policyVersion: this.policy.version,
+          },
           take: 50,
           orderBy: { lastSeenAt: 'desc' },
           include: {
@@ -145,8 +174,10 @@ export class EventIntelligenceService {
             locationKeys: locations.map((value) => value.normalizedKey),
           },
           candidates,
+          this.policy,
         );
         let eventId = match.eventId;
+        const eventCreated = !eventId;
         if (!eventId) {
           const title = `${eventType.replaceAll('_', ' ')} — ${entity?.name ?? location?.name ?? 'Unspecified context'}`;
           const created = await tx.event.upsert({
@@ -172,6 +203,7 @@ export class EventIntelligenceService {
               firstSeenAt: observed,
               lastSeenAt: observed,
               fingerprint,
+              policyVersion: this.policy.version,
               entities: { create: entities },
               locations: { create: locations },
             },
@@ -187,6 +219,14 @@ export class EventIntelligenceService {
             skipDuplicates: true,
           });
         }
+        const conflictWasDetected = eventCreated
+          ? false
+          : (
+              await tx.event.findUniqueOrThrow({
+                where: { id: eventId },
+                select: { conflictState: true },
+              })
+            ).conflictState === 'DETECTED';
         await tx.eventClaim.upsert({
           where: { eventId_claimId: { eventId, claimId } },
           update: {},
@@ -195,17 +235,15 @@ export class EventIntelligenceService {
             claimId,
             matchDecision: match.decision,
             matchReason: match.reason,
+            claimSignal: classifyClaimSignal(claim.statement),
           },
         });
         const links = await tx.eventClaim.findMany({
           where: { eventId },
           include: { claim: { include: { sourceArticle: true } } },
         });
-        const conflictFlags = links.map((link) =>
-          claimSignalsConflict(link.claim.statement),
-        );
-        const conflict =
-          conflictFlags.some(Boolean) && conflictFlags.some((value) => !value);
+        const signals = links.map((link) => link.claimSignal);
+        const conflict = supportingClaimsConflict(signals);
         const confidence = aggregateEventConfidence(
           links.map((link) => ({
             confidence: Number(link.claim.confidence),
@@ -213,6 +251,7 @@ export class EventIntelligenceService {
             sourceId: link.claim.sourceArticle.sourceId,
             conflicting: conflict,
           })),
+          this.policy,
         );
         const articleIds = new Set(
           links.map((link) => link.claim.sourceArticleId),
@@ -236,7 +275,7 @@ export class EventIntelligenceService {
             ),
             conflictState: conflict ? 'DETECTED' : 'NONE',
             conflictReason: conflict
-              ? 'Contradictory operational-state language in supporting claims'
+              ? 'Supporting Claims both affirm and explicitly deny the event'
               : null,
           },
         });
@@ -252,7 +291,13 @@ export class EventIntelligenceService {
             candidateEventIds: match.candidateEventIds,
           },
         });
-        return { eventId, match };
+        return {
+          eventId,
+          match,
+          eventCreated,
+          conflict,
+          conflictNewlyDetected: conflict && !conflictWasDetected,
+        };
       });
       console.info(
         JSON.stringify({
@@ -263,7 +308,17 @@ export class EventIntelligenceService {
           status: 'completed',
         }),
       );
-      return this.getEvent(result.eventId);
+      const event = await this.getEvent(result.eventId);
+      return {
+        ...event,
+        processingMetadata: processingMetadata({
+          claimsProcessed: 1,
+          eventsCreated: result.eventCreated ? 1 : 0,
+          claimsAttachedToExisting: result.eventCreated ? 0 : 1,
+          ambiguousMatches: result.match.decision === 'AMBIGUOUS' ? 1 : 0,
+          conflictsDetected: result.conflictNewlyDetected ? 1 : 0,
+        }),
+      };
     } catch (error) {
       const current = await db.claimEventProcessing.findUnique({
         where: { claimId },
@@ -393,4 +448,39 @@ export class EventIntelligenceService {
     });
   }
 }
-export const eventIntelligenceService = new EventIntelligenceService();
+
+export type EventProcessingMetrics = {
+  claimsProcessed: number;
+  claimsSkipped: number;
+  processingFailures: number;
+  eventsCreated: number;
+  claimsAttachedToExisting: number;
+  ambiguousMatches: number;
+  conflictsDetected: number;
+};
+export const processingMetadata = (
+  values: Partial<EventProcessingMetrics> = {},
+): EventProcessingMetrics => ({
+  claimsProcessed: 0,
+  claimsSkipped: 0,
+  processingFailures: 0,
+  eventsCreated: 0,
+  claimsAttachedToExisting: 0,
+  ambiguousMatches: 0,
+  conflictsDetected: 0,
+  ...values,
+});
+
+export function eventPolicyFromEnvironment(
+  env: { EVENT_MIN_CLAIM_CONFIDENCE?: string } = process.env,
+): EventPolicy {
+  return createEventPolicy(
+    env.EVENT_MIN_CLAIM_CONFIDENCE === undefined
+      ? {}
+      : { minimumClaimConfidence: Number(env.EVENT_MIN_CLAIM_CONFIDENCE) },
+  );
+}
+
+export const eventIntelligenceService = new EventIntelligenceService(
+  eventPolicyFromEnvironment(),
+);

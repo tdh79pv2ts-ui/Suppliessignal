@@ -31,6 +31,7 @@ type EventItem = {
   lastSeenAt: string;
   conflictState: string;
   conflictReason?: string | null;
+  policyVersion: string;
   supportingClaimCount: number;
   supportingArticleCount: number;
   supportingSourceCount: number;
@@ -42,6 +43,7 @@ type EventDetail = EventItem & {
     attachedAt: string;
     matchDecision: string;
     matchReason: string;
+    claimSignal: string;
     claim: {
       id: string;
       claimType: string;
@@ -226,6 +228,7 @@ export function EventDetailPage() {
                 {event.status} · {event.severity}
               </span>
               <span>confidence {event.confidence}</span>
+              <span>policy {event.policyVersion}</span>
               <span>{event.assertionMode}</span>
               <span>start {event.startDate ?? 'unknown'}</span>
               <span>end {event.endDate ?? 'unknown'}</span>
@@ -271,7 +274,8 @@ export function EventDetailPage() {
                   key={`${event.id}-${link.claim.id}`}
                 >
                   <p className="text-xs text-muted">
-                    {link.matchDecision}: {link.matchReason}
+                    {link.matchDecision} · {link.claimSignal}:{' '}
+                    {link.matchReason}
                   </p>
                   <p className="mt-2 font-medium">{link.claim.statement}</p>
                   <blockquote className="my-3 border-l-4 pl-4">

@@ -58,7 +58,7 @@ pnpm test            # unit and integration tests
 pnpm db:generate     # generate Prisma client
 pnpm db:migrate      # apply/create development migrations
 pnpm db:seed         # seed the fictional Phase 1 customer/user
-pnpm db:verify-migrations # clean and Phase 4.5→5 disposable upgrade verification
+pnpm db:verify-migrations # clean and Phase 5 hardening upgrade verification
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
 pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process
 pnpm --filter @suppliesignal/api start:event-worker # eligible Claim event processing
@@ -70,4 +70,4 @@ Use a managed PostgreSQL database, set `NODE_ENV=production`, configure exact `W
 
 ## Phase status
 
-Phase 5 is implemented: eligible global Claims become deterministic, deduplicated, fully traceable Events with explicit lifecycle and corroboration metadata. Production worker activation requires an auditable Phase 4.5 `GO` and a separate operational decision. Events are not matched to customer assets. Phase 6 remains unimplemented and requires explicit approval.
+Phase 5 is implemented: eligible global Claims become deterministic, deduplicated, fully traceable Events with explicit lifecycle and corroboration metadata. `EVENT_MIN_CLAIM_CONFIDENCE` defaults to `0.60`, is validated between zero and one, and should be calibrated from Phase 4.5 results. Production worker activation requires an auditable Phase 4.5 `GO` and a separate operational decision. Events are not matched to customer assets. Phase 6 remains unimplemented and requires explicit approval.

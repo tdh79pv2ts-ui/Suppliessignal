@@ -10,7 +10,7 @@ A Claim is one article-derived observation. An Event is a normalized real-world 
 
 ## Deterministic construction
 
-The controlled taxonomy and all validation, normalization, eligibility, matching, confidence, severity, conflict, and lifecycle rules live in `packages/shared/src/event-intelligence.ts`. An eligible Claim must come from a completed extraction, use a supported Claim type, have confidence of at least `0.60`, contain verified evidence, and identify an entity or location.
+The controlled taxonomy and versioned `EVENT_POLICY_VERSION` live with all validation, normalization, eligibility, matching, confidence, severity, conflict, and lifecycle rules in `packages/shared/src/event-intelligence.ts`. Historic unversioned Phase 5 Events migrate as policy `1.0`; hardened construction uses policy `1.1` and fingerprint version `2`. The default minimum Claim confidence is `0.60`; `EVENT_MIN_CLAIM_CONFIDENCE` accepts only values from zero through one. Calibrate it from Phase 4.5 POC results before production activation. Tests inject policies directly and do not mutate global environment state.
 
 The canonical fingerprint is:
 
@@ -24,9 +24,9 @@ Processing is idempotent. A PostgreSQL claim lease prevents simultaneous ownersh
 
 ## Aggregation and provenance
 
-Confidence starts with the strongest supporting Claim, adds at most `0.05` per additional independent source (maximum `0.15`) and `0.02` per additional article (maximum `0.06`), applies a `0.20` conflict penalty, and is capped at `0.99`. Repeated extraction runs for one article preserve provenance but do not masquerade as independent article or source corroboration.
+Confidence starts with the strongest supporting Claim, adds at most `0.05` per additional independent source (maximum `0.15`) and `0.02` per additional article (maximum `0.06`), applies a `0.20` conflict penalty, and is capped at `0.99`. These values and the three-day temporal window are centralized in the policy. Every new Event stores its policy version. Matching is restricted to that policy version, so changing current defaults neither recalculates nor silently attaches to historic Events. Rebuilding is not automatic.
 
-Severity is a documented deterministic rule based on event type and available location context. It does not use an LLM and is not customer impact. Conflict detection records contradictory operational-state language and reduces confidence; it never deletes supporting evidence or chooses truth automatically.
+Severity is a documented deterministic rule based on event type and available location context. It does not use an LLM and is not customer impact. Each EventClaim stores one conservative signal: `AFFIRMS_EVENT`, `DENIES_EVENT`, `RESOLUTION_SIGNAL`, `CANCELLATION_SIGNAL`, or `NEUTRAL`. Negated cancellation and denied reports are handled before positive keywords. Conflict exists only when supporting Claims both affirm and explicitly deny the same Event. Resolution/cancellation evidence remains separately inspectable, never changes lifecycle automatically, and does not by itself create conflict.
 
 Every Event links through EventClaim to the exact Claim, ArticleExtractionRun, SourceArticle, original URL, and Source. Reprocessing adds provenance without mutating old runs or Claims.
 

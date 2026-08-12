@@ -4,13 +4,15 @@ import {
   buildEventFingerprint,
   calculateEventSeverity,
   canTransitionEventStatus,
+  classifyClaimSignal,
   claimEligibility,
-  claimSignalsConflict,
   claimTypeToEventType,
+  createEventPolicy,
   eventTypeSchema,
   matchEvent,
   normalizeEventEntity,
   normalizeEventLocation,
+  supportingClaimsConflict,
 } from '../../packages/shared/src/event-intelligence';
 const candidate = {
   id: 'event-1',
@@ -29,46 +31,59 @@ describe('Phase 5 deterministic event intelligence', () => {
     expect(claimTypeToEventType('LABOUR_DISRUPTION')).toBe('LABOR_DISRUPTION');
     expect(claimTypeToEventType('OTHER')).toBeNull();
   });
-  it('centralizes Claim eligibility', () => {
+  it('centralizes configurable Claim eligibility', () => {
+    const policy = createEventPolicy({ minimumClaimConfidence: 0.75 });
     expect(
-      claimEligibility({
-        extractionStatus: 'COMPLETED',
-        claimType: 'STRIKE',
-        confidence: 0.8,
-        evidenceText: 'evidence',
-        entityCount: 1,
-        locationCount: 0,
-      }).eligible,
+      claimEligibility(
+        {
+          extractionStatus: 'COMPLETED',
+          claimType: 'STRIKE',
+          confidence: 0.8,
+          evidenceText: 'evidence',
+          entityCount: 1,
+          locationCount: 0,
+        },
+        policy,
+      ).eligible,
     ).toBe(true);
     expect(
-      claimEligibility({
-        extractionStatus: 'FAILED',
-        claimType: 'STRIKE',
-        confidence: 0.8,
-        evidenceText: 'evidence',
-        entityCount: 1,
-        locationCount: 0,
-      }),
+      claimEligibility(
+        {
+          extractionStatus: 'FAILED',
+          claimType: 'STRIKE',
+          confidence: 0.8,
+          evidenceText: 'evidence',
+          entityCount: 1,
+          locationCount: 0,
+        },
+        policy,
+      ),
     ).toMatchObject({ eligible: false, code: 'EXTRACTION_NOT_SUCCESSFUL' });
     expect(
-      claimEligibility({
-        extractionStatus: 'COMPLETED',
-        claimType: 'STRIKE',
-        confidence: 0.59,
-        evidenceText: 'evidence',
-        entityCount: 1,
-        locationCount: 0,
-      }),
+      claimEligibility(
+        {
+          extractionStatus: 'COMPLETED',
+          claimType: 'STRIKE',
+          confidence: 0.74,
+          evidenceText: 'evidence',
+          entityCount: 1,
+          locationCount: 0,
+        },
+        policy,
+      ),
     ).toMatchObject({ eligible: false, code: 'CLAIM_CONFIDENCE_TOO_LOW' });
     expect(
-      claimEligibility({
-        extractionStatus: 'COMPLETED',
-        claimType: 'STRIKE',
-        confidence: 0.8,
-        evidenceText: 'evidence',
-        entityCount: 0,
-        locationCount: 0,
-      }),
+      claimEligibility(
+        {
+          extractionStatus: 'COMPLETED',
+          claimType: 'STRIKE',
+          confidence: 0.8,
+          evidenceText: 'evidence',
+          entityCount: 0,
+          locationCount: 0,
+        },
+        policy,
+      ),
     ).toMatchObject({ eligible: false, code: 'CLAIM_CONTEXT_REQUIRED' });
   });
   it('normalizes conservative exact entity/location keys', () => {
@@ -167,12 +182,38 @@ describe('Phase 5 deterministic event intelligence', () => {
       ]),
     ).toBe(0.65);
   });
-  it('calculates operational severity and detects conflict language', () => {
+  it('calculates operational severity', () => {
     expect(calculateEventSeverity('PORT_CLOSURE', 2)).toBe('CRITICAL');
     expect(calculateEventSeverity('PORT_DISRUPTION', 1)).toBe('HIGH');
     expect(calculateEventSeverity('OTHER', 1)).toBe('LOW');
-    expect(claimSignalsConflict('The strike was cancelled')).toBe(true);
-    expect(claimSignalsConflict('The strike began Monday')).toBe(false);
+  });
+  it.each([
+    ['The strike was cancelled.', 'CANCELLATION_SIGNAL'],
+    ['The strike was not cancelled.', 'AFFIRMS_EVENT'],
+    ['Officials denied reports that the strike was cancelled.', 'NEUTRAL'],
+    ['No disruption occurred.', 'DENIES_EVENT'],
+    ['The port remains operational.', 'DENIES_EVENT'],
+    ['The port reopened after being closed.', 'RESOLUTION_SIGNAL'],
+    ['The strike continues.', 'AFFIRMS_EVENT'],
+  ])('classifies %s as %s', (statement, signal) => {
+    expect(classifyClaimSignal(statement)).toBe(signal);
+  });
+  it('detects only genuinely incompatible supporting Claim signals', () => {
+    expect(supportingClaimsConflict(['AFFIRMS_EVENT', 'DENIES_EVENT'])).toBe(
+      true,
+    );
+    expect(
+      supportingClaimsConflict(['AFFIRMS_EVENT', 'RESOLUTION_SIGNAL']),
+    ).toBe(false);
+    expect(
+      supportingClaimsConflict(['AFFIRMS_EVENT', 'CANCELLATION_SIGNAL']),
+    ).toBe(false);
+    expect(supportingClaimsConflict(['AFFIRMS_EVENT', 'AFFIRMS_EVENT'])).toBe(
+      false,
+    );
+  });
+  it('rejects invalid policy configuration', () => {
+    expect(() => createEventPolicy({ minimumClaimConfidence: 1.01 })).toThrow();
   });
   it('enforces explicit lifecycle transitions', () => {
     expect(canTransitionEventStatus('DETECTED', 'ACTIVE')).toBe(true);
