@@ -32,5 +32,5 @@ Phase 5 adds a global Event layer above immutable Claims. Event construction is 
 - JSON bodies are limited to 1 MB.
 - Authorization headers and common secret fields are redacted from structured logs.
 - Environment variables are validated at startup.
-- Development-header authentication cannot be enabled in production.
+- Development-header authentication cannot be enabled in staging or production.
 - Browser code receives only the Supabase anonymous key; service credentials remain server-side.

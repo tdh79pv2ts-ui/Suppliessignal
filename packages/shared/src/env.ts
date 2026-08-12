@@ -10,10 +10,14 @@ export const serverEnvSchema = z
     NODE_ENV: z
       .enum(['development', 'test', 'production'])
       .default('development'),
+    APP_ENV: z
+      .enum(['development', 'staging', 'production'])
+      .default('development'),
     DATABASE_URL: z.string().min(1),
     SUPABASE_URL: z.string().url().optional(),
     SUPABASE_ANON_KEY: z.string().min(1).optional(),
     SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
+    PORT: z.coerce.number().int().positive().optional(),
     API_PORT: z.coerce.number().int().positive().default(4000),
     WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
     ALLOW_DEV_AUTH: booleanString,
@@ -30,7 +34,24 @@ export const serverEnvSchema = z
     EVENT_MIN_CLAIM_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.6),
   })
   .superRefine((env, context) => {
-    if (env.NODE_ENV === 'production' && env.ALLOW_DEV_AUTH) {
+    const productionLike =
+      env.APP_ENV === 'staging' || env.APP_ENV === 'production';
+    if (productionLike && env.NODE_ENV !== 'production') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['NODE_ENV'],
+        message: `${env.APP_ENV} requires NODE_ENV=production`,
+      });
+    }
+    if (env.NODE_ENV === 'production' && env.APP_ENV === 'development') {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['APP_ENV'],
+        message:
+          'NODE_ENV=production requires APP_ENV=staging or APP_ENV=production',
+      });
+    }
+    if ((env.NODE_ENV === 'production' || productionLike) && env.ALLOW_DEV_AUTH) {
       context.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['ALLOW_DEV_AUTH'],
@@ -56,11 +77,22 @@ export const serverEnvSchema = z
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
 export function assertProductionAuthSafety(
-  env: Pick<ServerEnv, 'NODE_ENV' | 'ALLOW_DEV_AUTH'>,
+  env: Pick<ServerEnv, 'NODE_ENV' | 'APP_ENV' | 'ALLOW_DEV_AUTH'>,
 ): void {
-  if (env.NODE_ENV === 'production' && env.ALLOW_DEV_AUTH) {
+  if (
+    env.ALLOW_DEV_AUTH &&
+    (env.NODE_ENV === 'production' ||
+      env.APP_ENV === 'staging' ||
+      env.APP_ENV === 'production')
+  ) {
     throw new Error(
-      'Invalid production configuration: ALLOW_DEV_AUTH must be false',
+      'Invalid production-like configuration: ALLOW_DEV_AUTH must be false',
     );
   }
+}
+
+export function resolveServerPort(
+  env: Pick<ServerEnv, 'PORT' | 'API_PORT'>,
+): number {
+  return env.PORT ?? env.API_PORT;
 }

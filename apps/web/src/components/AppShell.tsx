@@ -22,6 +22,7 @@ const baseNavigation = [
 ];
 
 export function AppShell() {
+  const isStaging = import.meta.env.VITE_APP_ENV === 'staging';
   const { customerId, workspaces, setCustomerId, user } = useWorkspace();
   const navigation =
     user.role === 'ADMIN' || user.role === 'REVIEWER'
@@ -43,8 +44,13 @@ export function AppShell() {
             <Activity className="h-4 w-4 text-emerald-300" />
           </span>
           <div>
-            <div className="text-sm font-semibold tracking-tight">
-              SupplySignal
+            <div className="flex items-center gap-2 text-sm font-semibold tracking-tight">
+              <span>SupplySignal</span>
+              {isStaging ? (
+                <span className="rounded border border-amber-300/40 bg-amber-300/10 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.12em] text-amber-200">
+                  STAGING
+                </span>
+              ) : null}
             </div>
             <div className="text-[10px] uppercase tracking-[0.18em] text-white/45">
               Operations intelligence

@@ -20,6 +20,7 @@ export type ApiError = {
 export type HealthResponse = {
   status: 'ok';
   service: 'suppliesignal-api';
+  environment: 'development' | 'staging' | 'production';
   timestamp: string;
 };
 

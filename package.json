@@ -2,6 +2,9 @@
   "name": "suppliesignal",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22"
+  },
   "packageManager": "pnpm@11.16.0",
   "scripts": {
     "dev": "pnpm --filter @suppliesignal/shared build && pnpm --filter @suppliesignal/db build && pnpm --parallel --filter @suppliesignal/api --filter @suppliesignal/web dev",
@@ -11,6 +14,7 @@
     "test": "node scripts/run-tests.mjs",
     "test:watch": "vitest",
     "db:generate": "prisma generate",
+    "db:deploy": "prisma migrate deploy",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",

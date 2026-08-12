@@ -6,6 +6,7 @@ import { createApp } from '../../apps/api/src/app';
 
 const env: ServerEnv = {
   NODE_ENV: 'test',
+  APP_ENV: 'development',
   DATABASE_URL: 'postgresql://user:password@localhost:5432/test',
   API_PORT: 4000,
   WEB_ORIGIN: 'http://localhost:5173',
@@ -31,7 +32,29 @@ describe('API foundation', () => {
   it('reports health without authentication', async () => {
     const response = await requestAs(null).get('/api/health');
     expect(response.status).toBe(200);
-    expect(response.body).toMatchObject({ status: 'ok', service: 'suppliesignal-api' });
+    expect(response.body).toMatchObject({
+      status: 'ok',
+      service: 'suppliesignal-api',
+      environment: 'development',
+    });
+    expect(Object.keys(response.body).sort()).toEqual([
+      'environment',
+      'service',
+      'status',
+      'timestamp',
+    ]);
+  });
+
+  it('allows only the configured browser origin through CORS', async () => {
+    const allowed = await requestAs(null)
+      .get('/api/health')
+      .set('origin', env.WEB_ORIGIN);
+    expect(allowed.headers['access-control-allow-origin']).toBe(env.WEB_ORIGIN);
+
+    const unexpected = await requestAs(null)
+      .get('/api/health')
+      .set('origin', 'https://unexpected-preview.vercel.app');
+    expect(unexpected.headers['access-control-allow-origin']).toBeUndefined();
   });
 
   it('rejects protected routes without authentication', async () => {
@@ -79,9 +102,30 @@ describe('API foundation', () => {
   it('refuses to start with development auth enabled in production', () => {
     expect(() =>
       createApp({
-        env: { ...env, NODE_ENV: 'production', ALLOW_DEV_AUTH: true },
+        env: {
+          ...env,
+          NODE_ENV: 'production',
+          APP_ENV: 'staging',
+          ALLOW_DEV_AUTH: true,
+        },
         resolveUser: async () => customerUser,
       }),
     ).toThrow('ALLOW_DEV_AUTH must be false');
+  });
+
+  it('does not accept the development header in staging', async () => {
+    const stagingEnv = {
+      ...env,
+      NODE_ENV: 'production' as const,
+      APP_ENV: 'staging' as const,
+      ALLOW_DEV_AUTH: false,
+      SUPABASE_URL: 'https://staging-project.supabase.co',
+      SUPABASE_ANON_KEY: 'staging-anon-key',
+    };
+    const response = await request(createApp({ env: stagingEnv }))
+      .get('/api/me')
+      .set('x-dev-user-id', customerUser.id);
+    expect(response.status).toBe(401);
+    expect(response.body.error.code).toBe('UNAUTHORIZED');
   });
 });

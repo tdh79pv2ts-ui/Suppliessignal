@@ -10,10 +10,14 @@ await withDisposablePostgres(async ({ env }) => {
   const apiPort = await availablePort();
   const apiEnv = {
     ...env,
-    NODE_ENV: 'development',
-    API_PORT: String(apiPort),
+    NODE_ENV: 'production',
+    APP_ENV: 'staging',
+    PORT: String(apiPort),
+    API_PORT: '4000',
     WEB_ORIGIN: 'http://localhost:5173',
-    ALLOW_DEV_AUTH: 'true',
+    ALLOW_DEV_AUTH: 'false',
+    SUPABASE_URL: 'https://startup-check.supabase.co',
+    SUPABASE_ANON_KEY: 'startup-check-anon-key',
     LOG_LEVEL: 'fatal',
   };
   const server = spawn(
@@ -42,7 +46,7 @@ await withDisposablePostgres(async ({ env }) => {
     if (health.status !== 'ok')
       throw new Error('API health response was not ok');
     console.log(
-      `Application startup verified on disposable database (port ${apiPort})`,
+      `Production-like staging startup verified with Railway PORT precedence (port ${apiPort})`,
     );
   } finally {
     server.kill('SIGTERM');

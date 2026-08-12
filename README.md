@@ -4,7 +4,7 @@ SupplySignal is a customer-specific, evidence-first supply-chain intelligence pl
 
 ## Architecture
 
-Phase documentation includes [the extraction validation POC](docs/extraction-validation-poc.md) and [event intelligence](docs/event-intelligence.md).
+Phase documentation includes [the extraction validation POC](docs/extraction-validation-poc.md), [event intelligence](docs/event-intelligence.md), and the [manual staging deployment runbook](docs/staging-deployment.md).
 
 - `apps/web` — React, TypeScript, Vite, Tailwind application shell
 - `apps/api` — Express REST API with structured logging and server-side authorization
@@ -57,6 +57,7 @@ pnpm lint            # ESLint
 pnpm test            # unit and integration tests
 pnpm db:generate     # generate Prisma client
 pnpm db:migrate      # apply/create development migrations
+pnpm db:deploy       # apply existing migrations without reset (staging/production)
 pnpm db:seed         # seed the fictional Phase 1 customer/user
 pnpm db:verify-migrations # clean and Phase 5 hardening upgrade verification
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
@@ -66,7 +67,7 @@ pnpm --filter @suppliesignal/api start:event-worker # eligible Claim event proce
 
 ## Production configuration
 
-Use a managed PostgreSQL database, set `NODE_ENV=production`, configure exact `WEB_ORIGIN`, and supply secrets through the deployment platform. `ALLOW_DEV_AUTH` must remain `false`. Build with `pnpm build`, migrate with `pnpm prisma migrate deploy`, and start the API with `pnpm --filter @suppliesignal/api start`. Serve `apps/web/dist` from a static host and route it to the API configured by `VITE_API_URL`.
+Use a managed PostgreSQL database, set `NODE_ENV=production` plus an explicit `APP_ENV`, configure exact `WEB_ORIGIN`, and supply secrets through the deployment platform. `ALLOW_DEV_AUTH` must remain `false`. Build with `pnpm build`, migrate with `pnpm db:deploy`, and start the API with `pnpm --filter @suppliesignal/api start`. Serve `apps/web/dist` from a static host and route it to the API configured by `VITE_API_URL`. See the staging runbook for the exact Vercel, Railway, and Supabase configuration.
 
 ## Phase status
 

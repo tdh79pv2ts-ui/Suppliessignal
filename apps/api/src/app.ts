@@ -26,7 +26,13 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
 
   app.disable('x-powered-by');
   app.use(helmet());
-  app.use(cors({ origin: env.WEB_ORIGIN, credentials: true }));
+  app.use(
+    cors({
+      origin: (origin, callback) =>
+        callback(null, origin === undefined || origin === env.WEB_ORIGIN),
+      credentials: true,
+    }),
+  );
   app.use(express.json({ limit: '1mb' }));
   app.use(
     pinoHttp({
@@ -40,7 +46,12 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
   );
 
   app.get('/api/health', (_request, response) => {
-    const payload: HealthResponse = { status: 'ok', service: 'suppliesignal-api', timestamp: new Date().toISOString() };
+    const payload: HealthResponse = {
+      status: 'ok',
+      service: 'suppliesignal-api',
+      environment: env.APP_ENV,
+      timestamp: new Date().toISOString(),
+    };
     response.json(payload);
   });
 
