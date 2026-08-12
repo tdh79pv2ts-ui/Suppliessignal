@@ -12,9 +12,9 @@ pnpm lint
 pnpm build
 ```
 
-Integration tests construct the Express application with injected identity resolution, so authentication and tenant authorization can be checked without a live Supabase or database connection. Migration and seed execution require PostgreSQL.
+Integration tests cover both injected Express authorization and the real `SupplyChainService` against Prisma/PostgreSQL. `pnpm test` creates, migrates, and removes a dedicated local PostgreSQL cluster. It fails fast unless the database is local, named `suppliesignal_test_*`, and `NODE_ENV` is not production. PostgreSQL 16 command-line tools are required.
 
-For Phase 2 migration verification, use two disposable PostgreSQL databases: apply all migrations and the seed to one clean database; apply only the Phase 1 migrations and fixture membership data to the second, then apply the Phase 2 migration. This verifies both installation and non-destructive upgrade paths without relying on developer state.
+Run `pnpm db:verify-migrations` for Phase 2 migration verification. It uses two disposable PostgreSQL clusters: all migrations plus seed on a clean database, followed by an in-place upgrade of a Phase 1 database containing customer, user, and membership fixtures. It never resets existing developer data.
 
 ## Adding API routes
 
