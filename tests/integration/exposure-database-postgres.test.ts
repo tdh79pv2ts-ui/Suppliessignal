@@ -28,6 +28,7 @@ const ids = {
   customerB: randomUUID(),
   supplierA: randomUUID(),
   supplierB: randomUUID(),
+  factoryA: randomUUID(),
   factoryB: randomUUID(),
   port: randomUUID(),
   event: randomUUID(),
@@ -72,15 +73,25 @@ beforeAll(async () => {
       },
     ],
   });
-  await db.factory.create({
-    data: {
-      id: ids.factoryB,
-      customerId: ids.customerB,
-      supplierId: ids.supplierB,
-      name: 'Phase 6A Factory B',
-      country: 'Vietnam',
-      criticality: 'HIGH',
-    },
+  await db.factory.createMany({
+    data: [
+      {
+        id: ids.factoryA,
+        customerId: ids.customerA,
+        supplierId: ids.supplierA,
+        name: 'Phase 6A Factory A',
+        country: 'Thailand',
+        criticality: 'HIGH',
+      },
+      {
+        id: ids.factoryB,
+        customerId: ids.customerB,
+        supplierId: ids.supplierB,
+        name: 'Phase 6A Factory B',
+        country: 'Vietnam',
+        criticality: 'HIGH',
+      },
+    ],
   });
   await db.port.create({
     data: {
@@ -193,6 +204,39 @@ describe.sequential('Phase 6A exposure database constraints', () => {
     ).rejects.toThrow();
   });
 
+  it('accepts a path step with matching FACTORY type and factory subject', async () => {
+    const step = await db.exposurePathStep.create({
+      data: {
+        customerId: ids.customerA,
+        pathId: ids.pathA,
+        sequence: 1,
+        nodeType: 'FACTORY',
+        factoryId: ids.factoryA,
+        labelSnapshot: 'Phase 6A Factory A',
+      },
+    });
+
+    expect(step).toMatchObject({
+      nodeType: 'FACTORY',
+      factoryId: ids.factoryA,
+    });
+  });
+
+  it('rejects a path step whose FACTORY type points to a supplier', async () => {
+    await expect(
+      db.exposurePathStep.create({
+        data: {
+          customerId: ids.customerA,
+          pathId: ids.pathA,
+          sequence: 2,
+          nodeType: 'FACTORY',
+          supplierId: ids.supplierA,
+          labelSnapshot: 'Mismatched supplier',
+        },
+      }),
+    ).rejects.toThrow(/exposure_path_steps_subject_type_check/);
+  });
+
   it('requires exactly one typed identity subject and matching subject type', async () => {
     const base = {
       id: randomUUID(),
@@ -227,6 +271,65 @@ describe.sequential('Phase 6A exposure database constraints', () => {
         },
       }),
     ).rejects.toThrow();
+  });
+
+  it('accepts a candidate node with matching FACTORY type and factory subject', async () => {
+    const node = await db.exposureCandidateNode.create({
+      data: {
+        customerId: ids.customerA,
+        candidateId: ids.candidateA,
+        nodeType: 'FACTORY',
+        factoryId: ids.factoryA,
+        snapshot: { label: 'Phase 6A Factory A' },
+      },
+    });
+
+    expect(node).toMatchObject({
+      nodeType: 'FACTORY',
+      factoryId: ids.factoryA,
+    });
+  });
+
+  it('rejects a candidate node whose FACTORY type points to a supplier', async () => {
+    await expect(
+      db.exposureCandidateNode.create({
+        data: {
+          customerId: ids.customerA,
+          candidateId: ids.candidateA,
+          nodeType: 'FACTORY',
+          supplierId: ids.supplierA,
+          snapshot: { label: 'Mismatched supplier' },
+        },
+      }),
+    ).rejects.toThrow(/exposure_candidate_nodes_subject_type_check/);
+  });
+
+  it('rejects a candidate node with two populated subjects', async () => {
+    await expect(
+      db.exposureCandidateNode.create({
+        data: {
+          customerId: ids.customerA,
+          candidateId: ids.candidateA,
+          nodeType: 'FACTORY',
+          supplierId: ids.supplierA,
+          factoryId: ids.factoryA,
+          snapshot: { label: 'Two subjects' },
+        },
+      }),
+    ).rejects.toThrow(/exposure_candidate_nodes_one_subject_check/);
+  });
+
+  it('rejects a candidate node with no populated subject', async () => {
+    await expect(
+      db.exposureCandidateNode.create({
+        data: {
+          customerId: ids.customerA,
+          candidateId: ids.candidateA,
+          nodeType: 'FACTORY',
+          snapshot: { label: 'No subject' },
+        },
+      }),
+    ).rejects.toThrow(/exposure_candidate_nodes_one_subject_check/);
   });
 
   it('rejects invalid identity verification status transitions', async () => {

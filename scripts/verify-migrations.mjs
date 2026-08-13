@@ -12,6 +12,10 @@ const phaseFive = [
   '20260816000000_event_intelligence_engine',
   '20260817000000_event_policy_hardening',
 ];
+const phaseSixA = [
+  ...phaseFive,
+  '20260818000000_phase_6a_exposure_foundation',
+];
 const customerId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const userId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
@@ -39,7 +43,72 @@ await withDisposablePostgres(async ({ env, bin, port, databaseName }) => {
   );
 });
 
-console.log('B. PHASE 5 TO PHASE 6A UPGRADE');
+console.log('B. EXISTING PHASE 6A TO HARDENED PHASE 6A UPGRADE');
+await withDisposablePostgres(async ({ env, bin, port, databaseName }) => {
+  const psql = join(bin, 'psql');
+  for (const migration of phaseSixA) {
+    run(
+      psql,
+      [
+        '-h',
+        '127.0.0.1',
+        '-p',
+        String(port),
+        '-U',
+        'postgres',
+        '-d',
+        databaseName,
+        '-v',
+        'ON_ERROR_STOP=1',
+        '-f',
+        join('prisma', 'migrations', migration, 'migration.sql'),
+      ],
+      { env },
+    );
+    run('pnpm', ['prisma', 'migrate', 'resolve', '--applied', migration], {
+      env,
+    });
+  }
+  run(
+    psql,
+    [
+      '-h',
+      '127.0.0.1',
+      '-p',
+      String(port),
+      '-U',
+      'postgres',
+      '-d',
+      databaseName,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      `INSERT INTO customers (id,name,created_at,updated_at) VALUES ('${customerId}','Existing Phase 6A Customer',now(),now()); INSERT INTO suppliers(id,customer_id,name,country,tier,criticality,created_at,updated_at) VALUES ('cccccccc-cccc-4ccc-8ccc-cccccccccccc','${customerId}','Existing Phase 6A Supplier','Thailand','TIER_1','HIGH',now(),now()); INSERT INTO events(id,event_type,status,title,summary,severity,confidence,assertion_mode,temporal_precision,first_seen_at,last_seen_at,fingerprint,created_at,updated_at) VALUES ('55555555-5555-4555-8555-555555555555','STRIKE','DETECTED','Existing Phase 6A Event','Existing Phase 6A data','HIGH',0.8,'OBSERVED','UNKNOWN',now(),now(),'existing-phase6a-event',now(),now()); INSERT INTO exposure_candidates(id,customer_id,event_id,candidate_key,status,match_methods,reason_codes,event_entity_ids,event_location_ids,snapshot,exposure_policy_version,graph_revision,event_version,created_at,updated_at) VALUES ('44444444-4444-4444-8444-444444444444','${customerId}','55555555-5555-4555-8555-555555555555','existing-node','PENDING',ARRAY['COMPOSITE_EXACT_IDENTITY']::"ExposureMatchMethod"[],ARRAY['AMBIGUOUS_ENTITY_IDENTITY']::"ExposureReasonCode"[],ARRAY[]::uuid[],ARRAY[]::uuid[],'{}','1.0',0,1,now(),now()); INSERT INTO exposure_candidate_nodes(id,customer_id,candidate_id,supplier_id,snapshot,created_at) VALUES ('33333333-3333-4333-8333-333333333333','${customerId}','44444444-4444-4444-8444-444444444444','cccccccc-cccc-4ccc-8ccc-cccccccccccc','{}',now());`,
+    ],
+    { env },
+  );
+  run('pnpm', ['prisma', 'migrate', 'deploy'], { env });
+  run(
+    psql,
+    [
+      '-h',
+      '127.0.0.1',
+      '-p',
+      String(port),
+      '-U',
+      'postgres',
+      '-d',
+      databaseName,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      `SELECT EXISTS(SELECT 1 FROM exposure_candidate_nodes WHERE id='33333333-3333-4333-8333-333333333333' AND node_type='SUPPLIER') AS existing_node_backfilled, EXISTS(SELECT 1 FROM events WHERE id='55555555-5555-4555-8555-555555555555') AS phase5_event_preserved;`,
+    ],
+    { env },
+  );
+});
+
+console.log('C. PHASE 5 TO HARDENED PHASE 6A UPGRADE');
 await withDisposablePostgres(async ({ env, bin, port, databaseName }) => {
   const psql = join(bin, 'psql');
   for (const migration of phaseFive) {

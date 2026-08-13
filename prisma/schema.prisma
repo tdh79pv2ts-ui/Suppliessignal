@@ -1113,6 +1113,7 @@ model ExposureCandidateNode {
   id          String            @id @default(uuid()) @db.Uuid
   customerId  String            @map("customer_id") @db.Uuid
   candidateId String            @map("candidate_id") @db.Uuid
+  nodeType    ExposureNodeType  @map("node_type")
   supplierId  String?           @map("supplier_id") @db.Uuid
   factoryId   String?           @map("factory_id") @db.Uuid
   productId   String?           @map("product_id") @db.Uuid
