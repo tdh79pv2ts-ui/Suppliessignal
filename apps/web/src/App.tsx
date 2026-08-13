@@ -25,6 +25,7 @@ import {
 import { ClaimDetailPage, ClaimsPage } from './pages/ClaimsPages';
 import { PocDatasetPage, PocDatasetsPage, PocResultsPage } from './pages/PocExtractionPages';
 import { EventDetailPage, EventsPage } from './pages/EventPages';
+import { ExposureCandidatesPage, ExposureDetailPage, ExposuresPage, IdentityReviewPage } from './pages/ExposurePages';
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -176,6 +177,10 @@ export function App() {
         <Route path="/poc/extraction/:datasetId/results" element={globalIntelligenceAllowed ? <PocResultsPage /> : <Navigate to="/dashboard" replace />} />
         <Route path="/events" element={globalIntelligenceAllowed ? <EventsPage /> : <Navigate to="/dashboard" replace />} />
         <Route path="/events/:eventId" element={globalIntelligenceAllowed ? <EventDetailPage /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/exposures" element={<ExposuresPage />} />
+        <Route path="/exposures/:id" element={<ExposureDetailPage />} />
+        <Route path="/exposure-candidates" element={globalIntelligenceAllowed ? <ExposureCandidatesPage /> : <Navigate to="/dashboard" replace />} />
+        <Route path="/identity-review" element={globalIntelligenceAllowed ? <IdentityReviewPage /> : <Navigate to="/dashboard" replace />} />
         <Route
           path="/review"
           element={<PlaceholderPage title="Review queue" phase={8} />}

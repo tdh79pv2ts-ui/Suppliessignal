@@ -37,3 +37,12 @@ ADMIN triggers `POST /api/source-articles/:articleId/extract` and `/reprocess`. 
 ## Event intelligence routes
 
 `ADMIN` and `REVIEWER` may list `GET /api/events` and inspect `GET /api/events/:eventId`, including full Claim, extraction run, article, original URL, and source provenance. Lists support page/pageSize plus event type, status, severity, assertion mode, entity, location, country, and date filters. Only `ADMIN` may process an eligible Claim with `POST /api/events/process-claim/:claimId` or apply an explicit lifecycle transition with `PATCH /api/events/:eventId/status`. `CUSTOMER` is denied access to this global corpus.
+
+## Customer exposure routes
+
+- `GET /api/customers/:customerId/exposures[/:id]` — membership-scoped exposure list/detail; CUSTOMER sees confirmed items only.
+- `POST /api/customers/:customerId/exposures/:id/confirm|dismiss` — ADMIN or assigned REVIEWER.
+- `GET/POST /api/customers/:customerId/graph-identities` and verify/reject actions — ADMIN or assigned REVIEWER.
+- `GET /api/customers/:customerId/exposure-candidates[/:candidateId]` plus confirm/reject/proposal actions — ADMIN or assigned REVIEWER only; CUSTOMER is denied.
+- `/api/admin/event-identifiers` and verification actions — ADMIN only. A REVIEWER may submit evidence as a proposal from an assigned customer's candidate but cannot globally verify it.
+- `POST /api/admin/events/:id/reconcile-exposures` — ADMIN reconciliation trigger.

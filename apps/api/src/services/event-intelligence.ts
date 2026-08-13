@@ -210,14 +210,19 @@ export class EventIntelligenceService {
           });
           eventId = created.id;
         } else {
-          await tx.eventEntity.createMany({
+          const addedEntities = await tx.eventEntity.createMany({
             data: entities.map((value) => ({ ...value, eventId: eventId! })),
             skipDuplicates: true,
           });
-          await tx.eventLocation.createMany({
+          const addedLocations = await tx.eventLocation.createMany({
             data: locations.map((value) => ({ ...value, eventId: eventId! })),
             skipDuplicates: true,
           });
+          if (addedEntities.count > 0 || addedLocations.count > 0)
+            await tx.event.update({
+              where: { id: eventId },
+              data: { exposureVersion: { increment: 1 } },
+            });
         }
         const conflictWasDetected = eventCreated
           ? false
@@ -422,7 +427,10 @@ export class EventIntelligenceService {
         `Cannot transition Event from ${event.status} to ${status}`,
         409,
       );
-    return db.event.update({ where: { id }, data: { status } });
+    return db.event.update({
+      where: { id },
+      data: { status, exposureVersion: { increment: 1 } },
+    });
   }
   async pendingClaims(limit: number) {
     return db.claim.findMany({

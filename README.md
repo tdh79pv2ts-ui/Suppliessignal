@@ -1,6 +1,6 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, global source intelligence, schema-validated claim extraction, the Phase 4.5 validation POC, and Phase 5 deterministic event intelligence. Customer exposure, risk scoring, alerts, Daily Briefs, and notifications remain explicitly unimplemented.
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, global source intelligence, schema-validated claim extraction, the Phase 4.5 validation POC, deterministic event intelligence, and deterministic customer exposure matching. Risk scoring, alerts, Daily Briefs, and notifications remain explicitly unimplemented.
 
 ## Architecture
 
@@ -63,6 +63,7 @@ pnpm db:verify-migrations # clean and Phase 5 hardening upgrade verification
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
 pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process
 pnpm --filter @suppliesignal/api start:event-worker # eligible Claim event processing
+pnpm --filter @suppliesignal/api start:exposure-worker # Event/customer-graph reconciliation
 ```
 
 ## Production configuration
@@ -71,4 +72,4 @@ Use a managed PostgreSQL database, set `NODE_ENV=production` plus an explicit `A
 
 ## Phase status
 
-Phase 5 is implemented: eligible global Claims become deterministic, deduplicated, fully traceable Events with explicit lifecycle and corroboration metadata. `EVENT_MIN_CLAIM_CONFIDENCE` defaults to `0.60`, is validated between zero and one, and should be calibrated from Phase 4.5 results. Production worker activation requires an auditable Phase 4.5 `GO` and a separate operational decision. Events are not matched to customer assets. Phase 6 remains unimplemented and requires explicit approval.
+Phase 6 is implemented: verified external identifiers and exact structured geography deterministically reconcile unresolved Events with explicit customer graph data. One exposure is stored per Customer × Event, with auditable paths and separate ambiguity review. No AI or fuzzy identity matching is used. Risk scoring, alerts, briefs, notifications, and all Phase 7 work remain unimplemented.
