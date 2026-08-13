@@ -289,33 +289,152 @@ enum ClaimEventProcessingStatus {
   FAILED
 }
 
+enum ExposureType {
+  DIRECT_SUPPLIER
+  DIRECT_FACTORY
+  DIRECT_PORT
+  DIRECT_ROUTE
+  DIRECT_MATERIAL
+  DIRECT_PRODUCT
+  INDIRECT_SUPPLIER
+  INDIRECT_FACTORY
+  INDIRECT_ROUTE
+  GEOGRAPHIC_PROXIMITY
+}
+
+enum ExposureStatus {
+  POTENTIAL
+  CONFIRMED
+  DISMISSED
+  STALE
+  RESOLVED
+}
+
+enum ExposureDecision {
+  MATCH
+  AMBIGUOUS
+  NO_MATCH
+}
+
+enum ExposureMatchMethod {
+  VERIFIED_IDENTIFIER
+  REVIEWED_IDENTITY_MAPPING
+  GLOBAL_PORT_ID
+  PORT_CODE
+  COMPOSITE_EXACT_IDENTITY
+  EXACT_STRUCTURED_LOCATION
+  COORDINATE_PROXIMITY
+  EXPLICIT_GRAPH_PATH
+}
+
+enum ExposureMatchState {
+  VERIFIED_DIRECT
+  VERIFIED_INDIRECT
+  GEOGRAPHIC
+  AMBIGUOUS
+}
+
+enum ExposureNodeType {
+  SUPPLIER
+  FACTORY
+  PRODUCT
+  MATERIAL
+  ROUTE
+  PORT
+}
+
+enum IdentitySubjectType {
+  SUPPLIER
+  FACTORY
+  PRODUCT
+  MATERIAL
+  ROUTE
+  PORT
+}
+
+enum IdentityVerificationStatus {
+  PROPOSED
+  VERIFIED
+  UNVERIFIED
+  REJECTED
+}
+
+enum ExposureCandidateStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  SUPERSEDED
+}
+
+enum ExposureReasonCode {
+  EXACT_SUPPLIER_IDENTIFIER
+  EXACT_FACTORY_IDENTIFIER
+  EXACT_PRODUCT_IDENTIFIER
+  EXACT_MATERIAL_IDENTIFIER
+  EXACT_ROUTE_IDENTIFIER
+  EXACT_PORT_ID
+  EXACT_PORT_CODE
+  COMPOSITE_SUPPLIER_IDENTITY
+  COMPOSITE_FACTORY_IDENTITY
+  ROUTE_CONTAINS_ORIGIN_PORT
+  ROUTE_CONTAINS_DESTINATION_PORT
+  ROUTE_CONTAINS_INTERMEDIATE_PORT
+  EXPLICIT_SUPPLIER_PRODUCT_PATH
+  EXPLICIT_FACTORY_PRODUCT_PATH
+  EXPLICIT_PRODUCT_MATERIAL_PATH
+  EXPLICIT_ROUTE_SUPPLIER_PATH
+  EXPLICIT_ROUTE_FACTORY_PATH
+  EXACT_COORDINATE_PROXIMITY
+  EXACT_CITY_REGION_COUNTRY
+  EXACT_REGION_COUNTRY
+  COUNTRY_ONLY_PROXIMITY
+  AMBIGUOUS_ENTITY_IDENTITY
+  AMBIGUOUS_LOCATION
+  NAME_ONLY_MATCH_REJECTED
+  COUNTRY_MISMATCH
+  PORT_COUNTRY_MISMATCH
+  FACTORY_NOT_IN_CUSTOMER_GRAPH
+  NO_EXPLICIT_GRAPH_PATH
+  NODE_ARCHIVED
+  NO_SUPPORTED_MATCH
+}
+
 model User {
-  id          String               @id @db.Uuid
-  email       String               @unique
-  name        String?
-  role        UserRole             @default(CUSTOMER)
-  memberships CustomerMembership[]
-  claimEvaluations ClaimEvaluation[]
-  articleEvaluations ArticleEvaluation[]
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt @map("updated_at")
+  id                             String                  @id @db.Uuid
+  email                          String                  @unique
+  name                           String?
+  role                           UserRole                @default(CUSTOMER)
+  memberships                    CustomerMembership[]
+  claimEvaluations               ClaimEvaluation[]
+  articleEvaluations             ArticleEvaluation[]
+  reviewedExposures              CustomerExposure[]
+  verifiedGraphIdentities        CustomerGraphIdentity[]
+  proposedEventEntityIdentifiers EventEntityIdentifier[] @relation("EventEntityIdentifierProposer")
+  verifiedEventEntityIdentifiers EventEntityIdentifier[] @relation("EventEntityIdentifierVerifier")
+  reviewedExposureCandidates     ExposureCandidate[]
+  createdAt                      DateTime                @default(now()) @map("created_at")
+  updatedAt                      DateTime                @updatedAt @map("updated_at")
 
   @@map("users")
 }
 
 model Customer {
-  id                    String               @id @default(uuid()) @db.Uuid
+  id                    String                  @id @default(uuid()) @db.Uuid
   name                  String
   description           String?
-  defaultAlertThreshold Int                  @default(60) @map("default_alert_threshold")
+  defaultAlertThreshold Int                     @default(60) @map("default_alert_threshold")
   memberships           CustomerMembership[]
   suppliers             Supplier[]
   factories             Factory[]
   products              Product[]
   materials             Material[]
   routes                Route[]
-  createdAt             DateTime             @default(now()) @map("created_at")
-  updatedAt             DateTime             @updatedAt @map("updated_at")
+  graphRevision         BigInt                  @default(0) @map("graph_revision")
+  exposures             CustomerExposure[]
+  exposureCandidates    ExposureCandidate[]
+  graphIdentities       CustomerGraphIdentity[]
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
 
   @@map("customers")
 }
@@ -335,24 +454,27 @@ model CustomerMembership {
 }
 
 model Supplier {
-  id               String            @id @default(uuid()) @db.Uuid
-  customerId       String            @map("customer_id") @db.Uuid
-  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  name             String
-  legalName        String?           @map("legal_name")
-  country          String
-  city             String?
-  latitude         Decimal?          @db.Decimal(9, 6)
-  longitude        Decimal?          @db.Decimal(9, 6)
-  supplierType     String?           @map("supplier_type")
-  tier             SupplierTier
-  criticality      Criticality
-  active           Boolean           @default(true)
-  factories        Factory[]
-  supplierProducts SupplierProduct[]
-  routeSuppliers   RouteSupplier[]
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
+  id                     String                  @id @default(uuid()) @db.Uuid
+  customerId             String                  @map("customer_id") @db.Uuid
+  customer               Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name                   String
+  legalName              String?                 @map("legal_name")
+  country                String
+  city                   String?
+  latitude               Decimal?                @db.Decimal(9, 6)
+  longitude              Decimal?                @db.Decimal(9, 6)
+  supplierType           String?                 @map("supplier_type")
+  tier                   SupplierTier
+  criticality            Criticality
+  active                 Boolean                 @default(true)
+  factories              Factory[]
+  supplierProducts       SupplierProduct[]
+  routeSuppliers         RouteSupplier[]
+  exposurePathSteps      ExposurePathStep[]
+  exposureCandidateNodes ExposureCandidateNode[]
+  graphIdentities        CustomerGraphIdentity[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
 
   @@unique([id, customerId])
   @@index([customerId, active])
@@ -361,24 +483,27 @@ model Supplier {
 }
 
 model Factory {
-  id              String           @id @default(uuid()) @db.Uuid
-  customerId      String           @map("customer_id") @db.Uuid
-  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  supplierId      String?          @map("supplier_id") @db.Uuid
-  supplier        Supplier?        @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
-  name            String
-  address         String?
-  country         String
-  city            String?
-  latitude        Decimal?         @db.Decimal(9, 6)
-  longitude       Decimal?         @db.Decimal(9, 6)
-  productionType  String?          @map("production_type")
-  criticality     Criticality
-  active          Boolean          @default(true)
-  factoryProducts FactoryProduct[]
-  routeFactories  RouteFactory[]
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
+  id                     String                  @id @default(uuid()) @db.Uuid
+  customerId             String                  @map("customer_id") @db.Uuid
+  customer               Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplierId             String?                 @map("supplier_id") @db.Uuid
+  supplier               Supplier?               @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  name                   String
+  address                String?
+  country                String
+  city                   String?
+  latitude               Decimal?                @db.Decimal(9, 6)
+  longitude              Decimal?                @db.Decimal(9, 6)
+  productionType         String?                 @map("production_type")
+  criticality            Criticality
+  active                 Boolean                 @default(true)
+  factoryProducts        FactoryProduct[]
+  routeFactories         RouteFactory[]
+  exposurePathSteps      ExposurePathStep[]
+  exposureCandidateNodes ExposureCandidateNode[]
+  graphIdentities        CustomerGraphIdentity[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
 
   @@unique([id, customerId])
   @@index([customerId, active])
@@ -387,20 +512,23 @@ model Factory {
 }
 
 model Product {
-  id               String            @id @default(uuid()) @db.Uuid
-  customerId       String            @map("customer_id") @db.Uuid
-  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  name             String
-  sku              String?
-  category         String?
-  description      String?
-  criticality      Criticality
-  active           Boolean           @default(true)
-  factoryProducts  FactoryProduct[]
-  productMaterials ProductMaterial[]
-  supplierProducts SupplierProduct[]
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
+  id                     String                  @id @default(uuid()) @db.Uuid
+  customerId             String                  @map("customer_id") @db.Uuid
+  customer               Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name                   String
+  sku                    String?
+  category               String?
+  description            String?
+  criticality            Criticality
+  active                 Boolean                 @default(true)
+  factoryProducts        FactoryProduct[]
+  productMaterials       ProductMaterial[]
+  supplierProducts       SupplierProduct[]
+  exposurePathSteps      ExposurePathStep[]
+  exposureCandidateNodes ExposureCandidateNode[]
+  graphIdentities        CustomerGraphIdentity[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
 
   @@unique([id, customerId])
   @@unique([customerId, sku])
@@ -409,18 +537,21 @@ model Product {
 }
 
 model Material {
-  id               String            @id @default(uuid()) @db.Uuid
-  customerId       String            @map("customer_id") @db.Uuid
-  customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  name             String
-  category         String?
-  commodity        String?
-  criticality      Criticality
-  substitutable    Boolean           @default(false)
-  active           Boolean           @default(true)
-  productMaterials ProductMaterial[]
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
+  id                     String                  @id @default(uuid()) @db.Uuid
+  customerId             String                  @map("customer_id") @db.Uuid
+  customer               Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name                   String
+  category               String?
+  commodity              String?
+  criticality            Criticality
+  substitutable          Boolean                 @default(false)
+  active                 Boolean                 @default(true)
+  productMaterials       ProductMaterial[]
+  exposurePathSteps      ExposurePathStep[]
+  exposureCandidateNodes ExposureCandidateNode[]
+  graphIdentities        CustomerGraphIdentity[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
 
   @@unique([id, customerId])
   @@index([customerId, active])
@@ -428,37 +559,43 @@ model Material {
 }
 
 model Port {
-  id         String      @id @default(uuid()) @db.Uuid
-  name       String
-  country    String
-  city       String?
-  latitude   Decimal?    @db.Decimal(9, 6)
-  longitude  Decimal?    @db.Decimal(9, 6)
-  portCode   String?     @unique @map("port_code")
-  active     Boolean     @default(true)
-  routePorts RoutePort[]
-  createdAt  DateTime    @default(now()) @map("created_at")
-  updatedAt  DateTime    @updatedAt @map("updated_at")
+  id                     String                  @id @default(uuid()) @db.Uuid
+  name                   String
+  country                String
+  city                   String?
+  latitude               Decimal?                @db.Decimal(9, 6)
+  longitude              Decimal?                @db.Decimal(9, 6)
+  portCode               String?                 @unique @map("port_code")
+  active                 Boolean                 @default(true)
+  routePorts             RoutePort[]
+  exposurePathSteps      ExposurePathStep[]
+  exposureCandidateNodes ExposureCandidateNode[]
+  graphIdentities        CustomerGraphIdentity[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
 
   @@index([active, country])
   @@map("ports")
 }
 
 model Route {
-  id               String          @id @default(uuid()) @db.Uuid
-  customerId       String          @map("customer_id") @db.Uuid
-  customer         Customer        @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  name             String
-  originLabel      String          @map("origin_label")
-  destinationLabel String          @map("destination_label")
-  transportMode    TransportMode   @map("transport_mode")
-  criticality      Criticality
-  active           Boolean         @default(true)
-  routePorts       RoutePort[]
-  routeSuppliers   RouteSupplier[]
-  routeFactories   RouteFactory[]
-  createdAt        DateTime        @default(now()) @map("created_at")
-  updatedAt        DateTime        @updatedAt @map("updated_at")
+  id                     String                  @id @default(uuid()) @db.Uuid
+  customerId             String                  @map("customer_id") @db.Uuid
+  customer               Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  name                   String
+  originLabel            String                  @map("origin_label")
+  destinationLabel       String                  @map("destination_label")
+  transportMode          TransportMode           @map("transport_mode")
+  criticality            Criticality
+  active                 Boolean                 @default(true)
+  routePorts             RoutePort[]
+  routeSuppliers         RouteSupplier[]
+  routeFactories         RouteFactory[]
+  exposurePathSteps      ExposurePathStep[]
+  exposureCandidateNodes ExposureCandidateNode[]
+  graphIdentities        CustomerGraphIdentity[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
 
   @@unique([id, customerId])
   @@index([customerId, active])
@@ -575,30 +712,30 @@ model Source {
 }
 
 model SourceArticle {
-  id             String              @id @default(uuid()) @db.Uuid
-  sourceId       String              @map("source_id") @db.Uuid
-  source         Source              @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  originalUrl    String              @map("original_url")
-  canonicalUrl   String?             @map("canonical_url")
-  externalId     String?             @map("external_id")
-  title          String
-  author         String?
-  publishedAt    DateTime?           @map("published_at")
-  discoveredAt   DateTime            @default(now()) @map("discovered_at")
-  collectedAt    DateTime            @default(now()) @map("collected_at")
-  language       String?
-  rawText        String?             @map("raw_text")
-  normalizedText String?             @map("normalized_text")
-  excerpt        String?
-  contentHash    String              @map("content_hash")
-  urlHash        String              @map("url_hash")
-  status         SourceArticleStatus @default(COLLECTED)
-  extractionRuns ArticleExtractionRun[]
-  extractionLease ArticleExtractionLease?
-  claims         Claim[]
+  id                    String                  @id @default(uuid()) @db.Uuid
+  sourceId              String                  @map("source_id") @db.Uuid
+  source                Source                  @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  originalUrl           String                  @map("original_url")
+  canonicalUrl          String?                 @map("canonical_url")
+  externalId            String?                 @map("external_id")
+  title                 String
+  author                String?
+  publishedAt           DateTime?               @map("published_at")
+  discoveredAt          DateTime                @default(now()) @map("discovered_at")
+  collectedAt           DateTime                @default(now()) @map("collected_at")
+  language              String?
+  rawText               String?                 @map("raw_text")
+  normalizedText        String?                 @map("normalized_text")
+  excerpt               String?
+  contentHash           String                  @map("content_hash")
+  urlHash               String                  @map("url_hash")
+  status                SourceArticleStatus     @default(COLLECTED)
+  extractionRuns        ArticleExtractionRun[]
+  extractionLease       ArticleExtractionLease?
+  claims                Claim[]
   pocEvaluationArticles PocEvaluationArticle[]
-  createdAt      DateTime            @default(now()) @map("created_at")
-  updatedAt      DateTime            @updatedAt @map("updated_at")
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
 
   @@unique([sourceId, externalId])
   @@unique([sourceId, urlHash])
@@ -619,58 +756,59 @@ model ArticleExtractionLease {
 }
 
 model ArticleExtractionRun {
-  id                String              @id @default(uuid()) @db.Uuid
-  sourceArticleId   String              @map("source_article_id") @db.Uuid
-  sourceArticle     SourceArticle       @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
-  status            ExtractionRunStatus @default(PROCESSING)
-  provider          String
-  model             String
-  promptVersion     String              @map("prompt_version")
-  schemaVersion     String              @map("schema_version")
-  inputHash         String              @map("input_hash")
-  inputCharacters   Int                 @map("input_characters")
-  inputTruncated    Boolean             @default(false) @map("input_truncated")
-  inputTokens       Int?                @map("input_tokens")
-  outputTokens      Int?                @map("output_tokens")
-  claimsExtracted   Int                 @default(0) @map("claims_extracted")
-  articleRelevant   Boolean?            @map("article_relevant")
-  startedAt         DateTime            @default(now()) @map("started_at")
-  completedAt       DateTime?           @map("completed_at")
-  errorCode         String?             @map("error_code")
-  errorMessage      String?             @map("error_message")
-  claims            Claim[]
+  id                    String                 @id @default(uuid()) @db.Uuid
+  sourceArticleId       String                 @map("source_article_id") @db.Uuid
+  sourceArticle         SourceArticle          @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  status                ExtractionRunStatus    @default(PROCESSING)
+  provider              String
+  model                 String
+  promptVersion         String                 @map("prompt_version")
+  schemaVersion         String                 @map("schema_version")
+  inputHash             String                 @map("input_hash")
+  inputCharacters       Int                    @map("input_characters")
+  inputTruncated        Boolean                @default(false) @map("input_truncated")
+  inputTokens           Int?                   @map("input_tokens")
+  outputTokens          Int?                   @map("output_tokens")
+  claimsExtracted       Int                    @default(0) @map("claims_extracted")
+  articleRelevant       Boolean?               @map("article_relevant")
+  startedAt             DateTime               @default(now()) @map("started_at")
+  completedAt           DateTime?              @map("completed_at")
+  errorCode             String?                @map("error_code")
+  errorMessage          String?                @map("error_message")
+  claims                Claim[]
   pocEvaluationArticles PocEvaluationArticle[]
-  createdAt         DateTime            @default(now()) @map("created_at")
+  createdAt             DateTime               @default(now()) @map("created_at")
 
-  @@index([sourceArticleId, startedAt])
   @@unique([id, sourceArticleId])
+  @@index([sourceArticleId, startedAt])
   @@index([status, startedAt])
   @@map("article_extraction_runs")
 }
 
 model Claim {
-  id              String               @id @default(uuid()) @db.Uuid
-  sourceArticleId String               @map("source_article_id") @db.Uuid
-  extractionRunId String               @map("extraction_run_id") @db.Uuid
-  sourceArticle   SourceArticle        @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
-  extractionRun   ArticleExtractionRun @relation(fields: [extractionRunId], references: [id], onDelete: Restrict)
-  claimType       ClaimType            @map("claim_type")
-  assertionMode   AssertionMode        @map("assertion_mode")
-  statement       String
-  confidence      Decimal              @db.Decimal(4, 3)
-  occurredAt      DateTime?            @map("occurred_at")
-  validFrom       DateTime?            @map("valid_from")
-  validUntil      DateTime?            @map("valid_until")
-  evidenceText    String               @map("evidence_text")
-  evidenceStart   Int                  @map("evidence_start")
-  evidenceEnd     Int                  @map("evidence_end")
-  entities        ClaimEntity[]
-  locations       ClaimLocation[]
-  evaluations     ClaimEvaluation[]
-  eventLinks      EventClaim[]
-  eventProcessing ClaimEventProcessing?
-  createdAt       DateTime             @default(now()) @map("created_at")
-  updatedAt       DateTime             @updatedAt @map("updated_at")
+  id                     String                  @id @default(uuid()) @db.Uuid
+  sourceArticleId        String                  @map("source_article_id") @db.Uuid
+  extractionRunId        String                  @map("extraction_run_id") @db.Uuid
+  sourceArticle          SourceArticle           @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  extractionRun          ArticleExtractionRun    @relation(fields: [extractionRunId], references: [id], onDelete: Restrict)
+  claimType              ClaimType               @map("claim_type")
+  assertionMode          AssertionMode           @map("assertion_mode")
+  statement              String
+  confidence             Decimal                 @db.Decimal(4, 3)
+  occurredAt             DateTime?               @map("occurred_at")
+  validFrom              DateTime?               @map("valid_from")
+  validUntil             DateTime?               @map("valid_until")
+  evidenceText           String                  @map("evidence_text")
+  evidenceStart          Int                     @map("evidence_start")
+  evidenceEnd            Int                     @map("evidence_end")
+  entities               ClaimEntity[]
+  locations              ClaimLocation[]
+  evaluations            ClaimEvaluation[]
+  eventLinks             EventClaim[]
+  eventProcessing        ClaimEventProcessing?
+  eventEntityIdentifiers EventEntityIdentifier[]
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
 
   @@index([sourceArticleId, createdAt])
   @@index([extractionRunId])
@@ -679,33 +817,36 @@ model Claim {
 }
 
 model Event {
-  id                     String             @id @default(uuid()) @db.Uuid
-  eventType              EventType          @map("event_type")
-  status                 EventStatus        @default(DETECTED)
+  id                     String                 @id @default(uuid()) @db.Uuid
+  eventType              EventType              @map("event_type")
+  status                 EventStatus            @default(DETECTED)
   title                  String
   summary                String
   severity               EventSeverity
-  confidence             Decimal            @db.Decimal(4, 3)
-  assertionMode          AssertionMode      @map("assertion_mode")
-  startDate              DateTime?          @map("start_date")
-  endDate                DateTime?          @map("end_date")
-  occurredAt             DateTime?          @map("occurred_at")
-  observedAt             DateTime?          @map("observed_at")
+  confidence             Decimal                @db.Decimal(4, 3)
+  assertionMode          AssertionMode          @map("assertion_mode")
+  startDate              DateTime?              @map("start_date")
+  endDate                DateTime?              @map("end_date")
+  occurredAt             DateTime?              @map("occurred_at")
+  observedAt             DateTime?              @map("observed_at")
   temporalPrecision      EventTemporalPrecision @default(UNKNOWN) @map("temporal_precision")
-  firstSeenAt            DateTime           @map("first_seen_at")
-  lastSeenAt             DateTime           @map("last_seen_at")
-  fingerprint            String             @unique
-  policyVersion          String             @default("1.1") @map("policy_version")
-  conflictState          EventConflictState @default(NONE) @map("conflict_state")
-  conflictReason         String?            @map("conflict_reason")
-  supportingClaimCount   Int                @default(0) @map("supporting_claim_count")
-  supportingArticleCount Int                @default(0) @map("supporting_article_count")
-  supportingSourceCount  Int                @default(0) @map("supporting_source_count")
+  firstSeenAt            DateTime               @map("first_seen_at")
+  lastSeenAt             DateTime               @map("last_seen_at")
+  fingerprint            String                 @unique
+  policyVersion          String                 @default("1.1") @map("policy_version")
+  conflictState          EventConflictState     @default(NONE) @map("conflict_state")
+  conflictReason         String?                @map("conflict_reason")
+  supportingClaimCount   Int                    @default(0) @map("supporting_claim_count")
+  supportingArticleCount Int                    @default(0) @map("supporting_article_count")
+  supportingSourceCount  Int                    @default(0) @map("supporting_source_count")
   claimLinks             EventClaim[]
   entities               EventEntity[]
   locations              EventLocation[]
-  createdAt              DateTime           @default(now()) @map("created_at")
-  updatedAt              DateTime           @updatedAt @map("updated_at")
+  exposureVersion        Int                    @default(1) @map("exposure_version")
+  customerExposures      CustomerExposure[]
+  exposureCandidates     ExposureCandidate[]
+  createdAt              DateTime               @default(now()) @map("created_at")
+  updatedAt              DateTime               @updatedAt @map("updated_at")
 
   @@index([eventType, status, lastSeenAt])
   @@index([severity, lastSeenAt])
@@ -730,19 +871,48 @@ model EventClaim {
 }
 
 model EventEntity {
-  id             String          @id @default(uuid()) @db.Uuid
-  eventId        String          @map("event_id") @db.Uuid
-  event          Event           @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  entityType     EventEntityType @map("entity_type")
+  id             String                  @id @default(uuid()) @db.Uuid
+  eventId        String                  @map("event_id") @db.Uuid
+  event          Event                   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  entityType     EventEntityType         @map("entity_type")
   name           String
-  normalizedName String          @map("normalized_name")
-  normalizedKey  String          @map("normalized_key")
+  normalizedName String                  @map("normalized_name")
+  normalizedKey  String                  @map("normalized_key")
   role           String?
-  createdAt      DateTime        @default(now()) @map("created_at")
+  identifiers    EventEntityIdentifier[]
+  createdAt      DateTime                @default(now()) @map("created_at")
 
   @@unique([eventId, normalizedKey])
   @@index([entityType, normalizedName])
   @@map("event_entities")
+}
+
+model EventEntityIdentifier {
+  id                   String                     @id @default(uuid()) @db.Uuid
+  eventEntityId        String                     @map("event_entity_id") @db.Uuid
+  namespace            String
+  identifier           String
+  normalizedIdentifier String                     @map("normalized_identifier")
+  verificationStatus   IdentityVerificationStatus @default(UNVERIFIED) @map("verification_status")
+  provenanceSource     String                     @map("provenance_source")
+  provenanceRef        String?                    @map("provenance_ref")
+  evidenceNote         String?                    @map("evidence_note")
+  sourceClaimId        String?                    @map("source_claim_id") @db.Uuid
+  proposedAt           DateTime?                  @map("proposed_at")
+  proposedByUserId     String?                    @map("proposed_by_user_id") @db.Uuid
+  verifiedAt           DateTime?                  @map("verified_at")
+  verifiedByUserId     String?                    @map("verified_by_user_id") @db.Uuid
+  eventEntity          EventEntity                @relation(fields: [eventEntityId], references: [id], onDelete: Cascade)
+  sourceClaim          Claim?                     @relation(fields: [sourceClaimId], references: [id], onDelete: Restrict)
+  proposedBy           User?                      @relation("EventEntityIdentifierProposer", fields: [proposedByUserId], references: [id], onDelete: Restrict)
+  verifiedBy           User?                      @relation("EventEntityIdentifierVerifier", fields: [verifiedByUserId], references: [id], onDelete: Restrict)
+  createdAt            DateTime                   @default(now()) @map("created_at")
+  updatedAt            DateTime                   @updatedAt @map("updated_at")
+
+  @@unique([eventEntityId, namespace, normalizedIdentifier])
+  @@index([namespace, normalizedIdentifier, verificationStatus])
+  @@index([sourceClaimId])
+  @@map("event_entity_identifiers")
 }
 
 model EventLocation {
@@ -762,6 +932,211 @@ model EventLocation {
   @@unique([eventId, normalizedKey])
   @@index([country, region, city])
   @@map("event_locations")
+}
+
+model CustomerExposure {
+  id                    String              @id @default(uuid()) @db.Uuid
+  customerId            String              @map("customer_id") @db.Uuid
+  eventId               String              @map("event_id") @db.Uuid
+  status                ExposureStatus      @default(POTENTIAL)
+  primaryExposureType   ExposureType        @map("primary_exposure_type")
+  matchConfidence       Decimal             @map("match_confidence") @db.Decimal(4, 3)
+  matchState            ExposureMatchState  @map("match_state")
+  eventPolicyVersion    String              @map("event_policy_version")
+  exposurePolicyVersion String              @map("exposure_policy_version")
+  eventVersion          Int                 @map("event_version")
+  graphRevision         BigInt              @map("graph_revision")
+  firstDetectedAt       DateTime            @default(now()) @map("first_detected_at")
+  lastMatchedAt         DateTime            @map("last_matched_at")
+  resolvedAt            DateTime?           @map("resolved_at")
+  staleAt               DateTime?           @map("stale_at")
+  dismissedAt           DateTime?           @map("dismissed_at")
+  reviewedByUserId      String?             @map("reviewed_by_user_id") @db.Uuid
+  reviewReasonCode      ExposureReasonCode? @map("review_reason_code")
+  customer              Customer            @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  event                 Event               @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  reviewedBy            User?               @relation(fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  paths                 ExposurePath[]
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+
+  @@unique([customerId, eventId])
+  @@unique([id, customerId])
+  @@index([customerId, status, lastMatchedAt])
+  @@index([customerId, primaryExposureType, status])
+  @@index([eventId, status])
+  @@map("customer_exposures")
+}
+
+model ExposurePath {
+  id              String               @id @default(uuid()) @db.Uuid
+  customerId      String               @map("customer_id") @db.Uuid
+  exposureId      String               @map("exposure_id") @db.Uuid
+  pathKey         String               @map("path_key")
+  exposureType    ExposureType         @map("exposure_type")
+  decision        ExposureDecision
+  matchMethod     ExposureMatchMethod  @map("match_method")
+  matchConfidence Decimal              @map("match_confidence") @db.Decimal(4, 3)
+  reasonCodes     ExposureReasonCode[] @map("reason_codes")
+  activeMatch     Boolean              @default(true) @map("active_match")
+  firstMatchedAt  DateTime             @default(now()) @map("first_matched_at")
+  lastMatchedAt   DateTime             @map("last_matched_at")
+  invalidatedAt   DateTime?            @map("invalidated_at")
+  graphRevision   BigInt               @map("graph_revision")
+  eventVersion    Int                  @map("event_version")
+  snapshot        Json
+  exposure        CustomerExposure     @relation(fields: [exposureId, customerId], references: [id, customerId], onDelete: Restrict)
+  steps           ExposurePathStep[]
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+
+  @@unique([exposureId, pathKey])
+  @@unique([id, customerId])
+  @@index([customerId, activeMatch, exposureType])
+  @@index([exposureId, decision])
+  @@map("exposure_paths")
+}
+
+model ExposurePathStep {
+  id                 String           @id @default(uuid()) @db.Uuid
+  customerId         String           @map("customer_id") @db.Uuid
+  pathId             String           @map("path_id") @db.Uuid
+  sequence           Int
+  nodeType           ExposureNodeType @map("node_type")
+  edgeFromPrevious   String?          @map("edge_from_previous")
+  supplierId         String?          @map("supplier_id") @db.Uuid
+  factoryId          String?          @map("factory_id") @db.Uuid
+  productId          String?          @map("product_id") @db.Uuid
+  materialId         String?          @map("material_id") @db.Uuid
+  routeId            String?          @map("route_id") @db.Uuid
+  portId             String?          @map("port_id") @db.Uuid
+  labelSnapshot      String           @map("label_snapshot")
+  attributesSnapshot Json?            @map("attributes_snapshot")
+  activeSnapshot     Boolean?         @map("active_snapshot")
+  path               ExposurePath     @relation(fields: [pathId, customerId], references: [id, customerId], onDelete: Restrict)
+  supplier           Supplier?        @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory            Factory?         @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product            Product?         @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material           Material?        @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  route              Route?           @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  port               Port?            @relation(fields: [portId], references: [id], onDelete: Restrict)
+  createdAt          DateTime         @default(now()) @map("created_at")
+
+  @@unique([pathId, sequence])
+  @@index([customerId, supplierId])
+  @@index([customerId, factoryId])
+  @@index([customerId, productId])
+  @@index([customerId, materialId])
+  @@index([customerId, routeId])
+  @@index([portId])
+  @@map("exposure_path_steps")
+}
+
+model CustomerGraphIdentity {
+  id                   String                     @id @default(uuid()) @db.Uuid
+  customerId           String                     @map("customer_id") @db.Uuid
+  subjectType          IdentitySubjectType        @map("subject_type")
+  supplierId           String?                    @map("supplier_id") @db.Uuid
+  factoryId            String?                    @map("factory_id") @db.Uuid
+  productId            String?                    @map("product_id") @db.Uuid
+  materialId           String?                    @map("material_id") @db.Uuid
+  routeId              String?                    @map("route_id") @db.Uuid
+  portId               String?                    @map("port_id") @db.Uuid
+  namespace            String
+  identifier           String
+  normalizedIdentifier String                     @map("normalized_identifier")
+  verificationStatus   IdentityVerificationStatus @default(UNVERIFIED) @map("verification_status")
+  provenanceSource     String                     @map("provenance_source")
+  provenanceRef        String?                    @map("provenance_ref")
+  evidenceNote         String?                    @map("evidence_note")
+  verifiedAt           DateTime?                  @map("verified_at")
+  verifiedByUserId     String?                    @map("verified_by_user_id") @db.Uuid
+  customer             Customer                   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  supplier             Supplier?                  @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory              Factory?                   @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product              Product?                   @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material             Material?                  @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  route                Route?                     @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  port                 Port?                      @relation(fields: [portId], references: [id], onDelete: Restrict)
+  verifiedBy           User?                      @relation(fields: [verifiedByUserId], references: [id], onDelete: Restrict)
+  resultingCandidates  ExposureCandidate[]
+  createdAt            DateTime                   @default(now()) @map("created_at")
+  updatedAt            DateTime                   @updatedAt @map("updated_at")
+
+  @@unique([id, customerId])
+  @@index([namespace, normalizedIdentifier, verificationStatus])
+  @@index([customerId, supplierId])
+  @@index([customerId, factoryId])
+  @@index([customerId, productId])
+  @@index([customerId, materialId])
+  @@index([customerId, routeId])
+  @@index([portId])
+  @@map("customer_graph_identities")
+}
+
+model ExposureCandidate {
+  id                    String                  @id @default(uuid()) @db.Uuid
+  customerId            String                  @map("customer_id") @db.Uuid
+  eventId               String                  @map("event_id") @db.Uuid
+  candidateKey          String                  @map("candidate_key")
+  status                ExposureCandidateStatus @default(PENDING)
+  confidence            Decimal?                @db.Decimal(4, 3)
+  matchMethods          ExposureMatchMethod[]   @map("match_methods")
+  reasonCodes           ExposureReasonCode[]    @map("reason_codes")
+  eventEntityIds        String[]                @map("event_entity_ids") @db.Uuid
+  eventLocationIds      String[]                @map("event_location_ids") @db.Uuid
+  snapshot              Json
+  exposurePolicyVersion String                  @map("exposure_policy_version")
+  graphRevision         BigInt                  @map("graph_revision")
+  eventVersion          Int                     @map("event_version")
+  reviewedAt            DateTime?               @map("reviewed_at")
+  reviewedByUserId      String?                 @map("reviewed_by_user_id") @db.Uuid
+  reviewReasonCode      ExposureReasonCode?     @map("review_reason_code")
+  resultingIdentityId   String?                 @map("resulting_identity_id") @db.Uuid
+  customer              Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  event                 Event                   @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  reviewedBy            User?                   @relation(fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  resultingIdentity     CustomerGraphIdentity?  @relation(fields: [resultingIdentityId, customerId], references: [id, customerId], onDelete: Restrict)
+  nodes                 ExposureCandidateNode[]
+  createdAt             DateTime                @default(now()) @map("created_at")
+  updatedAt             DateTime                @updatedAt @map("updated_at")
+
+  @@unique([customerId, eventId, candidateKey, exposurePolicyVersion])
+  @@unique([id, customerId])
+  @@index([customerId, status, createdAt])
+  @@index([eventId, status])
+  @@index([resultingIdentityId, customerId])
+  @@map("exposure_candidates")
+}
+
+model ExposureCandidateNode {
+  id          String            @id @default(uuid()) @db.Uuid
+  customerId  String            @map("customer_id") @db.Uuid
+  candidateId String            @map("candidate_id") @db.Uuid
+  supplierId  String?           @map("supplier_id") @db.Uuid
+  factoryId   String?           @map("factory_id") @db.Uuid
+  productId   String?           @map("product_id") @db.Uuid
+  materialId  String?           @map("material_id") @db.Uuid
+  routeId     String?           @map("route_id") @db.Uuid
+  portId      String?           @map("port_id") @db.Uuid
+  snapshot    Json
+  candidate   ExposureCandidate @relation(fields: [candidateId, customerId], references: [id, customerId], onDelete: Restrict)
+  supplier    Supplier?         @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory     Factory?          @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product     Product?          @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material    Material?         @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  route       Route?            @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  port        Port?             @relation(fields: [portId], references: [id], onDelete: Restrict)
+  createdAt   DateTime          @default(now()) @map("created_at")
+
+  @@index([candidateId, customerId])
+  @@index([customerId, supplierId])
+  @@index([customerId, factoryId])
+  @@index([customerId, productId])
+  @@index([customerId, materialId])
+  @@index([customerId, routeId])
+  @@index([portId])
+  @@map("exposure_candidate_nodes")
 }
 
 model ClaimEventProcessing {
@@ -786,40 +1161,40 @@ model ClaimEventProcessing {
 }
 
 model PocEvaluationDataset {
-  id                         String           @id @default(uuid()) @db.Uuid
-  name                       String
-  description                String?
-  status                     PocDatasetStatus @default(DRAFT)
-  provider                   String?
-  model                      String?
-  promptVersion              String?          @map("prompt_version")
-  schemaVersion              String?          @map("schema_version")
-  thresholds                 Json
-  minimumArticlesReviewed    Int              @default(100) @map("minimum_articles_reviewed")
-  minimumClaimReviewPercent  Decimal          @default(90) @map("minimum_claim_review_percent") @db.Decimal(5, 2)
-  articles                   PocEvaluationArticle[]
-  claimEvaluations           ClaimEvaluation[]
-  createdAt                  DateTime         @default(now()) @map("created_at")
-  updatedAt                  DateTime         @updatedAt @map("updated_at")
+  id                        String                 @id @default(uuid()) @db.Uuid
+  name                      String
+  description               String?
+  status                    PocDatasetStatus       @default(DRAFT)
+  provider                  String?
+  model                     String?
+  promptVersion             String?                @map("prompt_version")
+  schemaVersion             String?                @map("schema_version")
+  thresholds                Json
+  minimumArticlesReviewed   Int                    @default(100) @map("minimum_articles_reviewed")
+  minimumClaimReviewPercent Decimal                @default(90) @map("minimum_claim_review_percent") @db.Decimal(5, 2)
+  articles                  PocEvaluationArticle[]
+  claimEvaluations          ClaimEvaluation[]
+  createdAt                 DateTime               @default(now()) @map("created_at")
+  updatedAt                 DateTime               @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
   @@map("poc_evaluation_datasets")
 }
 
 model PocEvaluationArticle {
-  id                String               @id @default(uuid()) @db.Uuid
-  datasetId         String               @map("dataset_id") @db.Uuid
-  sourceArticleId   String               @map("source_article_id") @db.Uuid
-  extractionRunId   String?              @map("extraction_run_id") @db.Uuid
-  status            PocArticleStatus     @default(PENDING)
-  errorCode         String?              @map("error_code")
-  errorMessage      String?              @map("error_message")
-  dataset           PocEvaluationDataset @relation(fields: [datasetId], references: [id], onDelete: Restrict)
-  sourceArticle     SourceArticle        @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
-  extractionRun     ArticleExtractionRun? @relation(fields: [extractionRunId, sourceArticleId], references: [id, sourceArticleId], onDelete: Restrict)
-  evaluation        ArticleEvaluation?
-  createdAt         DateTime             @default(now()) @map("created_at")
-  updatedAt         DateTime             @updatedAt @map("updated_at")
+  id              String                @id @default(uuid()) @db.Uuid
+  datasetId       String                @map("dataset_id") @db.Uuid
+  sourceArticleId String                @map("source_article_id") @db.Uuid
+  extractionRunId String?               @map("extraction_run_id") @db.Uuid
+  status          PocArticleStatus      @default(PENDING)
+  errorCode       String?               @map("error_code")
+  errorMessage    String?               @map("error_message")
+  dataset         PocEvaluationDataset  @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  sourceArticle   SourceArticle         @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  extractionRun   ArticleExtractionRun? @relation(fields: [extractionRunId, sourceArticleId], references: [id, sourceArticleId], onDelete: Restrict)
+  evaluation      ArticleEvaluation?
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
 
   @@unique([datasetId, sourceArticleId])
   @@index([datasetId, status])
@@ -828,24 +1203,24 @@ model PocEvaluationArticle {
 }
 
 model ClaimEvaluation {
-  id                  String                  @id @default(uuid()) @db.Uuid
-  datasetId           String                  @map("dataset_id") @db.Uuid
-  claimId             String                  @map("claim_id") @db.Uuid
-  reviewerUserId      String                  @map("reviewer_user_id") @db.Uuid
-  claimScore          EvaluationScore         @map("claim_score")
-  evidenceScore       EvaluationScore         @map("evidence_score")
-  entityScore         EvaluationScore         @map("entity_score")
-  locationScore       EvaluationScore         @map("location_score")
-  dateScore           EvaluationScore         @map("date_score")
-  assertionScore      EvaluationScore         @map("assertion_score")
-  unsupported         Boolean                 @default(false)
-  failureReason       EvaluationFailureReason? @map("failure_reason")
-  notes               String?
-  dataset             PocEvaluationDataset    @relation(fields: [datasetId], references: [id], onDelete: Restrict)
-  claim               Claim                   @relation(fields: [claimId], references: [id], onDelete: Restrict)
-  reviewer            User                    @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
-  createdAt           DateTime                @default(now()) @map("created_at")
-  updatedAt           DateTime                @updatedAt @map("updated_at")
+  id             String                   @id @default(uuid()) @db.Uuid
+  datasetId      String                   @map("dataset_id") @db.Uuid
+  claimId        String                   @map("claim_id") @db.Uuid
+  reviewerUserId String                   @map("reviewer_user_id") @db.Uuid
+  claimScore     EvaluationScore          @map("claim_score")
+  evidenceScore  EvaluationScore          @map("evidence_score")
+  entityScore    EvaluationScore          @map("entity_score")
+  locationScore  EvaluationScore          @map("location_score")
+  dateScore      EvaluationScore          @map("date_score")
+  assertionScore EvaluationScore          @map("assertion_score")
+  unsupported    Boolean                  @default(false)
+  failureReason  EvaluationFailureReason? @map("failure_reason")
+  notes          String?
+  dataset        PocEvaluationDataset     @relation(fields: [datasetId], references: [id], onDelete: Restrict)
+  claim          Claim                    @relation(fields: [claimId], references: [id], onDelete: Restrict)
+  reviewer       User                     @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  updatedAt      DateTime                 @updatedAt @map("updated_at")
 
   @@unique([datasetId, claimId])
   @@index([reviewerUserId])
@@ -853,18 +1228,18 @@ model ClaimEvaluation {
 }
 
 model ArticleEvaluation {
-  id                  String               @id @default(uuid()) @db.Uuid
-  datasetArticleId    String               @unique @map("dataset_article_id") @db.Uuid
-  reviewerUserId      String               @map("reviewer_user_id") @db.Uuid
-  expectedRelevant    Boolean              @map("expected_relevant")
-  extractedRelevant   Boolean?             @map("extracted_relevant")
-  missedClaims        Int                  @default(0) @map("missed_claims")
-  missedClaimNotes    String?              @map("missed_claim_notes")
-  notes               String?
-  datasetArticle      PocEvaluationArticle @relation(fields: [datasetArticleId], references: [id], onDelete: Restrict)
-  reviewer            User                 @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
+  id                String               @id @default(uuid()) @db.Uuid
+  datasetArticleId  String               @unique @map("dataset_article_id") @db.Uuid
+  reviewerUserId    String               @map("reviewer_user_id") @db.Uuid
+  expectedRelevant  Boolean              @map("expected_relevant")
+  extractedRelevant Boolean?             @map("extracted_relevant")
+  missedClaims      Int                  @default(0) @map("missed_claims")
+  missedClaimNotes  String?              @map("missed_claim_notes")
+  notes             String?
+  datasetArticle    PocEvaluationArticle @relation(fields: [datasetArticleId], references: [id], onDelete: Restrict)
+  reviewer          User                 @relation(fields: [reviewerUserId], references: [id], onDelete: Restrict)
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt @map("updated_at")
 
   @@index([reviewerUserId])
   @@map("article_evaluations")
