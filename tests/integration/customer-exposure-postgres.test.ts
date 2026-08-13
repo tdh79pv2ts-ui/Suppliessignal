@@ -69,4 +69,53 @@ describe.sequential('Phase 6 customer exposure with PostgreSQL', () => {
     expect(result.eventsProcessed).toBeGreaterThan(0);
     expect(await db.customerExposure.count({ where: { customerId: item.customer.id, eventId: item.event.id } })).toBe(1);
   });
+
+  it('does not match the same city in a different country', async () => {
+    const item = await fixture({ verified: false });
+    await db.eventLocation.updateMany({ where: { eventId: item.event.id }, data: { country: 'Belgium' } });
+    await service.reconcileEvent(item.event.id);
+    expect(await db.customerExposure.count({ where: { customerId: item.customer.id, eventId: item.event.id } })).toBe(0);
+  });
+
+  it('matches a verified Port and its active customer Route without invalid reason codes', async () => {
+    const suffix = crypto.randomUUID();
+    const reviewer = await db.user.create({ data: { id: crypto.randomUUID(), email: `port-${suffix}@example.test`, role: 'ADMIN' } });
+    const customer = await db.customer.create({ data: { name: `Port customer ${suffix}` } });
+    const port = await db.port.create({ data: { name: `Port ${suffix}`, country: 'Singapore', portCode: `P${suffix.slice(0, 8)}` } });
+    const route = await db.route.create({ data: { customerId: customer.id, name: `Route ${suffix}`, originLabel: 'A', destinationLabel: 'B', transportMode: 'SEA', criticality: 'HIGH', routePorts: { create: { portId: port.id, sequence: 1 } } } });
+    const event = await db.event.create({ data: { eventType: 'PORT_DISRUPTION', title: `Port event ${suffix}`, summary: 'Fixture', severity: 'HIGH', confidence: 0.9, assertionMode: 'OBSERVED', firstSeenAt: new Date(), lastSeenAt: new Date(), fingerprint: `port-${suffix}`, entities: { create: { entityType: 'PORT', name: port.name, normalizedName: port.name.toLowerCase(), normalizedKey: `port:${suffix}` } } }, include: { entities: true } });
+    await db.customerGraphIdentity.create({ data: { customerId: customer.id, subjectType: 'PORT', portId: port.id, namespace: 'UNLOCODE', identifier: port.portCode!, normalizedIdentifier: port.portCode!, verificationStatus: 'VERIFIED', provenanceSource: 'fixture', verifiedAt: new Date(), verifiedByUserId: reviewer.id } });
+    await db.eventEntityIdentifier.create({ data: { eventEntityId: event.entities[0]!.id, namespace: 'UNLOCODE', identifier: port.portCode!, normalizedIdentifier: port.portCode!, verificationStatus: 'VERIFIED', provenanceSource: 'fixture', verifiedAt: new Date(), verifiedByUserId: reviewer.id } });
+    await service.reconcileEvent(event.id);
+    const exposure = await db.customerExposure.findUniqueOrThrow({ where: { customerId_eventId: { customerId: customer.id, eventId: event.id } }, include: { paths: { include: { steps: true } } } });
+    expect(exposure.paths.every((path) => path.reasonCodes.includes('EXACT_PORT_ID'))).toBe(true);
+    expect(exposure.paths.flatMap((path) => path.steps).some((step) => step.routeId === route.id)).toBe(true);
+  });
+
+  it('invalidates exposure after its matched graph node is archived', async () => {
+    const item = await fixture();
+    await service.reconcileEvent(item.event.id);
+    await db.supplier.update({ where: { id: item.supplier.id }, data: { active: false } });
+    await db.factory.update({ where: { id: item.factory.id }, data: { active: false } });
+    await service.reconcileEvent(item.event.id);
+    const exposure = await db.customerExposure.findUniqueOrThrow({ where: { customerId_eventId: { customerId: item.customer.id, eventId: item.event.id } } });
+    expect(exposure.status).toBe('STALE');
+    expect(await db.exposurePath.count({ where: { exposureId: exposure.id, activeMatch: true } })).toBe(0);
+  });
+
+  it('rejects candidate confirmation with an unrelated customer identity', async () => {
+    const item = await fixture({ countryOnly: true, verified: false });
+    await service.reconcileEvent(item.event.id);
+    const candidate = await db.exposureCandidate.findFirstOrThrow({ where: { customerId: item.customer.id, eventId: item.event.id } });
+    await expect(service.reviewCandidate(item.customer.id, candidate.id, item.reviewer.id, true, 'AMBIGUOUS_LOCATION', (await db.customerGraphIdentity.findFirstOrThrow({ where: { customerId: item.customer.id } })).id)).rejects.toMatchObject({ code: 'IDENTITY_NOT_IN_CANDIDATE' });
+    expect((await db.exposureCandidate.findUniqueOrThrow({ where: { id: candidate.id } })).status).toBe('PENDING');
+  });
+
+  it('allows the same verified master identifier on separate historic Events', async () => {
+    const first = await fixture();
+    const secondSuffix = crypto.randomUUID();
+    const second = await db.event.create({ data: { eventType: 'SUPPLIER_DISRUPTION', title: `Second event ${secondSuffix}`, summary: 'Fixture', severity: 'MEDIUM', confidence: 0.8, assertionMode: 'OBSERVED', firstSeenAt: new Date(), lastSeenAt: new Date(), fingerprint: `second-${secondSuffix}`, entities: { create: { entityType: 'COMPANY', name: 'Same supplier', normalizedName: 'same supplier', normalizedKey: `company:${secondSuffix}` } } }, include: { entities: true } });
+    const original = await db.eventEntityIdentifier.findFirstOrThrow({ where: { eventEntity: { eventId: first.event.id } } });
+    await expect(db.eventEntityIdentifier.create({ data: { eventEntityId: second.entities[0]!.id, namespace: original.namespace, identifier: original.identifier, normalizedIdentifier: original.normalizedIdentifier, verificationStatus: 'VERIFIED', provenanceSource: 'fixture', verifiedAt: new Date(), verifiedByUserId: first.reviewer.id } })).resolves.toMatchObject({ verificationStatus: 'VERIFIED' });
+  });
 });

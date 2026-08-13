@@ -8,10 +8,10 @@ import type { CustomerExposureService } from '../../apps/api/src/services/custom
 const customerA = '11111111-1111-4111-8111-111111111111';
 const customerB = '22222222-2222-4222-8222-222222222222';
 const id = '33333333-3333-4333-8333-333333333333';
-function app(role: AuthenticatedUser['role'], memberships: string[] = [customerA]) {
+function app(role: AuthenticatedUser['role'], memberships: string[] = [customerA], authenticated = true) {
   const service = new Proxy({}, { get: () => vi.fn(async () => []) }) as CustomerExposureService;
   const instance = express(); instance.use(express.json());
-  instance.use('/api', createCustomerExposureRouter(async () => ({ id, email: 'user@example.test', name: 'User', role, customerIds: memberships }), service));
+  instance.use('/api', createCustomerExposureRouter(async () => authenticated ? ({ id, email: 'user@example.test', name: 'User', role, customerIds: memberships }) : null, service));
   return instance;
 }
 
@@ -29,5 +29,8 @@ describe('Phase 6 membership authorization', () => {
   it('allows ADMIN platform-wide customer and global identity access', async () => {
     expect((await request(app('ADMIN', [])).get(`/api/customers/${customerB}/exposure-candidates`)).status).toBe(200);
     expect((await request(app('ADMIN', [])).post(`/api/admin/event-identifiers/${id}/verify`)).status).toBe(200);
+  });
+  it('rejects unauthenticated requests', async () => {
+    expect((await request(app('CUSTOMER', [customerA], false)).get(`/api/customers/${customerA}/exposures`)).status).toBe(401);
   });
 });

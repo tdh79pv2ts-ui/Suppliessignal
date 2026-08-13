@@ -10,7 +10,7 @@ One `CustomerExposure` exists per Customer × Event and may contain multiple imm
 
 ## Identity governance and ambiguity
 
-ADMIN and assigned REVIEWER may manage verified customer graph identities. REVIEWER may propose a global Event identity with provenance, but only ADMIN may verify or reject it because that identity can affect all customers. Unverified identifiers do not match. Conflicting verified identifiers are rejected by database uniqueness constraints rather than silently resolved.
+ADMIN and assigned REVIEWER may manage verified customer graph identities. REVIEWER may propose a global Event identity with provenance, but only ADMIN may verify or reject it because that identity can affect all customers. Unverified identifiers do not match. Within one customer, a verified identifier can resolve to only one graph subject. The same authoritative identifier may occur on EventEntities from multiple historic Events; each occurrence retains its own provenance and verification.
 
 `AMBIGUOUS` outcomes persist as `ExposureCandidate` records. CUSTOMER cannot read candidates. Confirmation requires a tenant-safe resulting customer identity and then re-runs normal reconciliation; it never mutates the customer graph or bypasses the verified global identity requirement.
 
