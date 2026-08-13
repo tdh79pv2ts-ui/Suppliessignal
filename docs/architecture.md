@@ -19,8 +19,12 @@ Phase 2 adds a factual customer-owned supply-chain graph behind a service layer.
 SOURCE REGISTRY → COLLECTORS → RAW ITEM → NORMALIZATION → DEDUPLICATION → SOURCE ARTICLE → EXTRACTION RUN → CLAIMS → EVENTS
 
 CUSTOMER → SUPPLY CHAIN GRAPH → DETERMINISTIC CUSTOMER EXPOSURE
+
+SOURCE ARTICLE → DIRECT DETERMINISTIC NEWS RADAR → CUSTOMER GRAPH PATH
 ```
 Claims, extracted entities, and locations are global derived data. They never mutate or resolve into customer graph records. Evidence text is matched deterministically to the exact bounded article input, while provider output is strict-schema validated.
+
+The news-radar POC is a separate direct Article-to-graph path. It does not use Claims, Events, identity governance, candidates, or reviewer workflows. Typed database references keep direct radar exposures tenant-safe and the original SourceArticle URL remains authoritative evidence.
 
 ## Security decisions
 

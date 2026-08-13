@@ -1,6 +1,6 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, global source intelligence, schema-validated claim extraction, the Phase 4.5 validation POC, deterministic event intelligence, and deterministic customer exposure matching. Risk scoring, alerts, Daily Briefs, and notifications remain explicitly unimplemented.
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, global source intelligence, a direct deterministic news-radar POC, schema-validated claim extraction, the Phase 4.5 validation POC, deterministic event intelligence, and deterministic customer exposure matching. Risk scoring, alerts, Daily Briefs, and notifications remain explicitly unimplemented.
 
 ## Architecture
 
@@ -64,6 +64,7 @@ pnpm --filter @suppliesignal/api start:worker # scheduled source collector proce
 pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process
 pnpm --filter @suppliesignal/api start:event-worker # eligible Claim event processing
 pnpm --filter @suppliesignal/api start:exposure-worker # Event/customer-graph reconciliation
+pnpm --filter @suppliesignal/api start:news-radar-worker # direct Article/customer-graph POC matching
 ```
 
 ## Production configuration
@@ -72,4 +73,6 @@ Use a managed PostgreSQL database, set `NODE_ENV=production` plus an explicit `A
 
 ## Phase status
 
-Phase 6 is implemented: verified external identifiers and exact structured geography deterministically reconcile unresolved Events with explicit customer graph data. One exposure is stored per Customer × Event, with auditable paths and separate ambiguity review. No AI or fuzzy identity matching is used. Risk scoring, alerts, briefs, notifications, and all Phase 7 work remain unimplemented.
+The news-radar POC reuses RSS/Atom evidence and matches SourceArticles directly to explicit customer graph data without Claims, Events, identity resolution, review workflows, scoring, or alerts. See [the POC design and limitations](docs/supply-chain-news-radar-poc.md).
+
+Phase 6 remains implemented independently: verified external identifiers and exact structured geography deterministically reconcile unresolved Events with explicit customer graph data. One exposure is stored per Customer × Event, with auditable paths and separate ambiguity review. No AI or fuzzy identity matching is used. Risk scoring, alerts, briefs, and notifications remain unimplemented.

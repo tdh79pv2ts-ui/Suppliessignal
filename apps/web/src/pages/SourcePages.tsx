@@ -141,7 +141,7 @@ function SourceForm({
           name="collectionIntervalMinutes"
           type="number"
           min="5"
-          defaultValue={initial?.collectionIntervalMinutes ?? 60}
+          defaultValue={initial?.collectionIntervalMinutes ?? 15}
           className="mt-1 w-full rounded-lg border px-3 py-2"
         />
       </label>

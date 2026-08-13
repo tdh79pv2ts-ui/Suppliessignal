@@ -10,6 +10,7 @@ import {
   FlaskConical,
   Radar,
   Network,
+  Newspaper,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/auth';
@@ -18,7 +19,8 @@ import { useWorkspace } from '../lib/workspace';
 const baseNavigation = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
   { label: 'Supply chain', to: '/supply-chain', icon: Boxes },
-  { label: 'Exposures', to: '/exposures', icon: Network },
+  { label: 'News radar', to: '/news-radar', icon: Newspaper },
+  { label: 'Event exposures', to: '/exposures', icon: Network },
   { label: 'Review', to: '/review', icon: FileCheck2 },
   { label: 'Settings', to: '/settings', icon: Settings },
 ];
@@ -29,7 +31,7 @@ export function AppShell() {
   const navigation =
     user.role === 'ADMIN' || user.role === 'REVIEWER'
       ? [
-          ...baseNavigation.slice(0, 3),
+          ...baseNavigation.slice(0, 4),
           { label: 'Sources', to: '/sources', icon: RadioTower },
           { label: 'Articles', to: '/source-articles', icon: FileCheck2 },
           { label: 'Claims', to: '/claims', icon: FileCheck2 },
@@ -37,7 +39,7 @@ export function AppShell() {
           { label: 'Events', to: '/events', icon: Radar },
           { label: 'Candidates', to: '/exposure-candidates', icon: FileCheck2 },
           { label: 'Identities', to: '/identity-review', icon: ShieldCheck },
-          ...baseNavigation.slice(3),
+          ...baseNavigation.slice(4),
         ]
       : baseNavigation;
   return (

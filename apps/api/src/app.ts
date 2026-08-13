@@ -14,6 +14,7 @@ import { createExtractionRouter } from './routes/extraction.js';
 import { createPocEvaluationRouter } from './routes/poc-evaluation.js';
 import { createEventRouter } from './routes/events.js';
 import { createCustomerExposureRouter } from './routes/customer-exposure.js';
+import { createNewsRadarRouter } from './routes/news-radar.js';
 
 type AppOptions = {
   env: ServerEnv;
@@ -86,6 +87,7 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
   app.use('/api', createPocEvaluationRouter(resolveUser));
   app.use('/api', createEventRouter(resolveUser));
   app.use('/api', createCustomerExposureRouter(resolveUser));
+  app.use('/api', createNewsRadarRouter(resolveUser));
   app.use(supplyChainErrorHandler);
 
   app.use((_request, response) => {

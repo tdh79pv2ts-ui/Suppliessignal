@@ -46,3 +46,7 @@ ADMIN triggers `POST /api/source-articles/:articleId/extract` and `/reprocess`. 
 - `GET /api/customers/:customerId/exposure-candidates[/:candidateId]` plus confirm/reject/proposal actions — ADMIN or assigned REVIEWER only; CUSTOMER is denied.
 - `/api/admin/event-identifiers` and verification actions — ADMIN only. A REVIEWER may submit evidence as a proposal from an assigned customer's candidate but cannot globally verify it.
 - `POST /api/admin/events/:id/reconcile-exposures` — ADMIN reconciliation trigger.
+
+## News radar POC routes
+
+Membership-scoped reads are available at `/api/customers/:customerId/news-radar`, `/monitoring-profile`, `/exposures`, and `/exposures/:exposureId`. They expose only direct deterministic Article-to-graph results for the requested customer. ADMIN may process a single article with `POST /api/admin/news-radar/articles/:articleId/process` or a bounded pending batch with `POST /api/admin/news-radar/process-pending`. These routes do not use Claims, Events, identity resolution, risk scoring, or review decisions.

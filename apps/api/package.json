@@ -11,6 +11,7 @@
     "start:extraction-worker": "node dist/apps/api/src/extraction-worker.js",
     "start:event-worker": "node dist/apps/api/src/event-worker.js",
     "start:exposure-worker": "node dist/apps/api/src/exposure-worker.js",
+    "start:news-radar-worker": "node dist/apps/api/src/news-radar-worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src"
   },

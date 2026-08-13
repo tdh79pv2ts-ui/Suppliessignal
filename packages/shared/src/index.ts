@@ -7,3 +7,4 @@ export * from './ai-extraction.js';
 export * from './poc-evaluation.js';
 export * from './event-intelligence.js';
 export * from './customer-exposure.js';
+export * from './news-radar.js';

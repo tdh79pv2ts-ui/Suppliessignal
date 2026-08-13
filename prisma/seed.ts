@@ -444,6 +444,155 @@ async function main() {
       });
   }
 
+  const radarSourceId = 'a1000000-0000-4000-8000-000000000001';
+  await prisma.source.upsert({
+    where: { id: radarSourceId },
+    update: {},
+    create: {
+      id: radarSourceId,
+      name: 'Fictional Supply Chain News Desk',
+      sourceType: 'MANUAL',
+      baseUrl: 'https://news-radar-fixture.invalid',
+      category: 'NEWS',
+      reliability: 'HIGH',
+      active: true,
+      collectionEnabled: false,
+      collectionIntervalMinutes: 15,
+    },
+  });
+  const radarFixtures = [
+    {
+      articleId: 'a2000000-0000-4000-8000-000000000001',
+      exposureId: 'a3000000-0000-4000-8000-000000000001',
+      title: 'Fictional fire halts work at Gazipur Apparel Works',
+      text: 'A fictional fire caused a production shutdown at Gazipur Apparel Works in Gazipur, Bangladesh.',
+      entityType: 'FACTORY' as const,
+      topic: 'OPERATIONAL' as const,
+      method: 'UNIQUE_EXACT_NAME' as const,
+      matchKey: `factory:${factoryRows[0][0]}`,
+      confidence: 0.92,
+      reason: 'Factory name occurs exactly in disruptive coverage.',
+      matchedTerms: ['Gazipur Apparel Works'],
+      factoryId: factoryRows[0][0],
+      path: [
+        { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
+        { nodeType: 'SUPPLIER', id: supplierRows[0][0], label: supplierRows[0][1], relationship: 'explicit supplier' },
+        { nodeType: 'FACTORY', id: factoryRows[0][0], label: factoryRows[0][2], relationship: 'explicit factory' },
+      ],
+    },
+    {
+      articleId: 'a2000000-0000-4000-8000-000000000002',
+      exposureId: 'a3000000-0000-4000-8000-000000000002',
+      title: 'Fictional Port of Chattogram closure delays shipping',
+      text: 'A fictional port closure at the Port of Chattogram caused shipping delays.',
+      entityType: 'PORT' as const,
+      topic: 'LOGISTICS' as const,
+      method: 'EXACT_PORT_NAME' as const,
+      matchKey: `port:${routeRows[0][0]}:${ports[0][0]}`,
+      confidence: 0.93,
+      reason: 'A named port is explicitly present on this customer route.',
+      matchedTerms: ['Port of Chattogram'],
+      routePortRouteId: routeRows[0][0],
+      portId: ports[0][0],
+      path: [
+        { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
+        { nodeType: 'ROUTE', id: routeRows[0][0], label: routeRows[0][1], relationship: 'explicit route' },
+        { nodeType: 'PORT', id: ports[0][0], label: ports[0][1], relationship: 'route port sequence 1' },
+      ],
+    },
+    {
+      articleId: 'a2000000-0000-4000-8000-000000000003',
+      exposureId: 'a3000000-0000-4000-8000-000000000003',
+      title: 'Fictional export restriction affects Bengal Apparel Partners in Bangladesh',
+      text: 'A fictional export restriction affects Bengal Apparel Partners in Bangladesh.',
+      entityType: 'SUPPLIER' as const,
+      topic: 'TRADE' as const,
+      method: 'NAME_AND_LOCATION' as const,
+      matchKey: `supplier:${supplierRows[0][0]}`,
+      confidence: 0.9,
+      reason: 'Supplier name and location occur exactly in disruptive coverage.',
+      matchedTerms: ['Bengal Apparel Partners', 'Bangladesh'],
+      supplierId: supplierRows[0][0],
+      path: [
+        { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
+        { nodeType: 'SUPPLIER', id: supplierRows[0][0], label: supplierRows[0][1], relationship: 'explicit supplier' },
+      ],
+    },
+    {
+      articleId: 'a2000000-0000-4000-8000-000000000004',
+      exposureId: 'a3000000-0000-4000-8000-000000000004',
+      title: 'Fictional cotton shortage disrupts apparel production',
+      text: 'A fictional cotton shortage disrupts apparel production across the region.',
+      entityType: 'MATERIAL' as const,
+      topic: 'OPERATIONAL' as const,
+      method: 'UNIQUE_EXACT_NAME' as const,
+      matchKey: `material:${materialIds[0]}`,
+      confidence: 0.84,
+      reason: 'Material or commodity name occurs exactly in disruptive coverage.',
+      matchedTerms: ['Cotton'],
+      materialId: materialIds[0],
+      path: [
+        { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
+        { nodeType: 'PRODUCT', id: productRows[0][0], label: productRows[0][1], relationship: 'explicit product' },
+        { nodeType: 'MATERIAL', id: materialIds[0], label: materialNames[0], relationship: 'explicit product material' },
+      ],
+    },
+  ];
+  for (const fixture of radarFixtures) {
+    await prisma.sourceArticle.upsert({
+      where: { id: fixture.articleId },
+      update: {},
+      create: {
+        id: fixture.articleId,
+        sourceId: radarSourceId,
+        originalUrl: `https://news-radar-fixture.invalid/articles/${fixture.articleId}`,
+        title: fixture.title,
+        excerpt: fixture.text,
+        normalizedText: fixture.text,
+        publishedAt: new Date('2026-08-13T00:00:00Z'),
+        contentHash: `news-radar-content-${fixture.articleId}`,
+        urlHash: `news-radar-url-${fixture.articleId}`,
+        status: 'NORMALIZED',
+      },
+    });
+    await prisma.newsRadarArticleProcessing.upsert({
+      where: { sourceArticleId: fixture.articleId },
+      update: {},
+      create: {
+        sourceArticleId: fixture.articleId,
+        status: 'COMPLETED',
+        ownerToken: 'a4000000-0000-4000-8000-000000000001',
+        leaseExpiresAt: new Date('2026-08-13T00:00:00Z'),
+        completedAt: new Date('2026-08-13T00:00:00Z'),
+        topics: [fixture.topic],
+        detectedTerms: fixture.matchedTerms,
+        detectedLocations: fixture.matchedTerms.filter((value) => ['Bangladesh', 'Gazipur', 'Port of Chattogram'].includes(value)),
+      },
+    });
+    await prisma.newsRadarExposure.upsert({
+      where: { customerId_sourceArticleId_matchKey: { customerId: customer.id, sourceArticleId: fixture.articleId, matchKey: fixture.matchKey } },
+      update: {},
+      create: {
+        id: fixture.exposureId,
+        customerId: customer.id,
+        sourceArticleId: fixture.articleId,
+        matchKey: fixture.matchKey,
+        entityType: fixture.entityType,
+        topic: fixture.topic,
+        matchMethod: fixture.method,
+        confidence: fixture.confidence,
+        reason: fixture.reason,
+        matchedTerms: fixture.matchedTerms,
+        pathSnapshot: fixture.path,
+        supplierId: 'supplierId' in fixture ? fixture.supplierId : undefined,
+        factoryId: 'factoryId' in fixture ? fixture.factoryId : undefined,
+        materialId: 'materialId' in fixture ? fixture.materialId : undefined,
+        routePortRouteId: 'routePortRouteId' in fixture ? fixture.routePortRouteId : undefined,
+        portId: 'portId' in fixture ? fixture.portId : undefined,
+      },
+    });
+  }
+
   const eventFixtureSourceId = '91000000-0000-4000-8000-000000000001';
   await prisma.source.upsert({
     where: { id: eventFixtureSourceId },

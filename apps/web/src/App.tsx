@@ -26,6 +26,7 @@ import { ClaimDetailPage, ClaimsPage } from './pages/ClaimsPages';
 import { PocDatasetPage, PocDatasetsPage, PocResultsPage } from './pages/PocExtractionPages';
 import { EventDetailPage, EventsPage } from './pages/EventPages';
 import { ExposureCandidatesPage, ExposureDetailPage, ExposuresPage, IdentityReviewPage } from './pages/ExposurePages';
+import { NewsRadarDashboard, NewsRadarExposureDetailPage } from './pages/NewsRadarPages';
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -116,6 +117,8 @@ export function App() {
       />
       <Route element={shell}>
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/news-radar" element={<NewsRadarDashboard />} />
+        <Route path="/news-radar/exposures/:id" element={<NewsRadarExposureDetailPage />} />
         <Route path="/supply-chain" element={<SupplyChainOverview />} />
         {entityKinds.flatMap((kind) => [
           <Route

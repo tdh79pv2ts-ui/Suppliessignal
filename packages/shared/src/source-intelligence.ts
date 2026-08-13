@@ -60,7 +60,8 @@ const sourceFieldsSchema = z.object({
     .min(5)
     .max(10080)
     .nullable()
-    .optional(),
+    .optional()
+    .default(15),
 });
 export const sourceConfigurationSchema = sourceFieldsSchema.superRefine(
   (value, context) => {

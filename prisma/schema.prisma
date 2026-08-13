@@ -78,6 +78,41 @@ enum CollectionRunStatus {
   FAILED
 }
 
+enum NewsRadarTopic {
+  GEOPOLITICAL
+  ECONOMIC
+  OPERATIONAL
+  LOGISTICS
+  ENVIRONMENTAL
+  TRADE
+}
+
+enum NewsRadarEntityType {
+  SUPPLIER
+  FACTORY
+  PRODUCT
+  MATERIAL
+  ROUTE
+  PORT
+}
+
+enum NewsRadarMatchMethod {
+  EXACT_LEGAL_NAME
+  UNIQUE_EXACT_NAME
+  NAME_AND_LOCATION
+  EXACT_CITY_COUNTRY
+  EXACT_COUNTRY
+  EXACT_PORT_NAME
+  EXACT_PORT_CODE
+  ROUTE_ENDPOINTS
+}
+
+enum NewsRadarProcessingStatus {
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
 enum ExtractionRunStatus {
   PROCESSING
   COMPLETED
@@ -433,6 +468,7 @@ model Customer {
   exposures             CustomerExposure[]
   exposureCandidates    ExposureCandidate[]
   graphIdentities       CustomerGraphIdentity[]
+  newsRadarExposures    NewsRadarExposure[]
   createdAt             DateTime                @default(now()) @map("created_at")
   updatedAt             DateTime                @updatedAt @map("updated_at")
 
@@ -473,6 +509,7 @@ model Supplier {
   exposurePathSteps      ExposurePathStep[]
   exposureCandidateNodes ExposureCandidateNode[]
   graphIdentities        CustomerGraphIdentity[]
+  newsRadarExposures     NewsRadarExposure[]
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
 
@@ -502,6 +539,7 @@ model Factory {
   exposurePathSteps      ExposurePathStep[]
   exposureCandidateNodes ExposureCandidateNode[]
   graphIdentities        CustomerGraphIdentity[]
+  newsRadarExposures     NewsRadarExposure[]
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
 
@@ -527,6 +565,7 @@ model Product {
   exposurePathSteps      ExposurePathStep[]
   exposureCandidateNodes ExposureCandidateNode[]
   graphIdentities        CustomerGraphIdentity[]
+  newsRadarExposures     NewsRadarExposure[]
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
 
@@ -550,6 +589,7 @@ model Material {
   exposurePathSteps      ExposurePathStep[]
   exposureCandidateNodes ExposureCandidateNode[]
   graphIdentities        CustomerGraphIdentity[]
+  newsRadarExposures     NewsRadarExposure[]
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
 
@@ -594,6 +634,7 @@ model Route {
   exposurePathSteps      ExposurePathStep[]
   exposureCandidateNodes ExposureCandidateNode[]
   graphIdentities        CustomerGraphIdentity[]
+  newsRadarExposures     NewsRadarExposure[]
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
 
@@ -642,15 +683,17 @@ model SupplierProduct {
 }
 
 model RoutePort {
-  customerId String   @map("customer_id") @db.Uuid
-  routeId    String   @map("route_id") @db.Uuid
-  portId     String   @map("port_id") @db.Uuid
-  sequence   Int
-  route      Route    @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
-  port       Port     @relation(fields: [portId], references: [id], onDelete: Restrict)
-  createdAt  DateTime @default(now()) @map("created_at")
+  customerId         String              @map("customer_id") @db.Uuid
+  routeId            String              @map("route_id") @db.Uuid
+  portId             String              @map("port_id") @db.Uuid
+  sequence           Int
+  route              Route               @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  port               Port                @relation(fields: [portId], references: [id], onDelete: Restrict)
+  createdAt          DateTime            @default(now()) @map("created_at")
+  newsRadarExposures NewsRadarExposure[]
 
   @@id([routeId, portId])
+  @@unique([routeId, portId, customerId])
   @@unique([routeId, sequence])
   @@index([customerId])
   @@index([portId])
@@ -696,7 +739,7 @@ model Source {
   reliability                SourceReliability
   active                     Boolean               @default(true)
   collectionEnabled          Boolean               @default(false) @map("collection_enabled")
-  collectionIntervalMinutes  Int?                  @map("collection_interval_minutes")
+  collectionIntervalMinutes  Int?                  @default(15) @map("collection_interval_minutes")
   lastCollectedAt            DateTime?             @map("last_collected_at")
   lastSuccessfulCollectionAt DateTime?             @map("last_successful_collection_at")
   lastFailureAt              DateTime?             @map("last_failure_at")
@@ -712,36 +755,95 @@ model Source {
 }
 
 model SourceArticle {
-  id                    String                  @id @default(uuid()) @db.Uuid
-  sourceId              String                  @map("source_id") @db.Uuid
-  source                Source                  @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  originalUrl           String                  @map("original_url")
-  canonicalUrl          String?                 @map("canonical_url")
-  externalId            String?                 @map("external_id")
+  id                    String                      @id @default(uuid()) @db.Uuid
+  sourceId              String                      @map("source_id") @db.Uuid
+  source                Source                      @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  originalUrl           String                      @map("original_url")
+  canonicalUrl          String?                     @map("canonical_url")
+  externalId            String?                     @map("external_id")
   title                 String
   author                String?
-  publishedAt           DateTime?               @map("published_at")
-  discoveredAt          DateTime                @default(now()) @map("discovered_at")
-  collectedAt           DateTime                @default(now()) @map("collected_at")
+  publishedAt           DateTime?                   @map("published_at")
+  discoveredAt          DateTime                    @default(now()) @map("discovered_at")
+  collectedAt           DateTime                    @default(now()) @map("collected_at")
   language              String?
-  rawText               String?                 @map("raw_text")
-  normalizedText        String?                 @map("normalized_text")
+  rawText               String?                     @map("raw_text")
+  normalizedText        String?                     @map("normalized_text")
   excerpt               String?
-  contentHash           String                  @map("content_hash")
-  urlHash               String                  @map("url_hash")
-  status                SourceArticleStatus     @default(COLLECTED)
+  contentHash           String                      @map("content_hash")
+  urlHash               String                      @map("url_hash")
+  status                SourceArticleStatus         @default(COLLECTED)
   extractionRuns        ArticleExtractionRun[]
   extractionLease       ArticleExtractionLease?
   claims                Claim[]
   pocEvaluationArticles PocEvaluationArticle[]
-  createdAt             DateTime                @default(now()) @map("created_at")
-  updatedAt             DateTime                @updatedAt @map("updated_at")
+  newsRadarProcessing   NewsRadarArticleProcessing?
+  newsRadarExposures    NewsRadarExposure[]
+  createdAt             DateTime                    @default(now()) @map("created_at")
+  updatedAt             DateTime                    @updatedAt @map("updated_at")
 
   @@unique([sourceId, externalId])
   @@unique([sourceId, urlHash])
   @@index([sourceId, contentHash])
   @@index([collectedAt, status])
   @@map("source_articles")
+}
+
+model NewsRadarArticleProcessing {
+  sourceArticleId   String                    @id @map("source_article_id") @db.Uuid
+  sourceArticle     SourceArticle             @relation(fields: [sourceArticleId], references: [id], onDelete: Cascade)
+  status            NewsRadarProcessingStatus @default(RUNNING)
+  ownerToken        String                    @map("owner_token") @db.Uuid
+  leaseExpiresAt    DateTime                  @map("lease_expires_at")
+  attemptCount      Int                       @default(1) @map("attempt_count")
+  topics            NewsRadarTopic[]
+  detectedTerms     String[]                  @map("detected_terms")
+  detectedLocations String[]                  @map("detected_locations")
+  completedAt       DateTime?                 @map("completed_at")
+  errorCode         String?                   @map("error_code")
+  errorMessage      String?                   @map("error_message")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+
+  @@index([status, leaseExpiresAt])
+  @@map("news_radar_article_processing")
+}
+
+model NewsRadarExposure {
+  id               String               @id @default(uuid()) @db.Uuid
+  customerId       String               @map("customer_id") @db.Uuid
+  sourceArticleId  String               @map("source_article_id") @db.Uuid
+  matchKey         String               @map("match_key")
+  entityType       NewsRadarEntityType  @map("entity_type")
+  topic            NewsRadarTopic
+  matchMethod      NewsRadarMatchMethod @map("match_method")
+  confidence       Decimal              @db.Decimal(4, 3)
+  reason           String
+  matchedTerms     String[]             @map("matched_terms")
+  pathSnapshot     Json                 @map("path_snapshot")
+  supplierId       String?              @map("supplier_id") @db.Uuid
+  factoryId        String?              @map("factory_id") @db.Uuid
+  productId        String?              @map("product_id") @db.Uuid
+  materialId       String?              @map("material_id") @db.Uuid
+  routeId          String?              @map("route_id") @db.Uuid
+  routePortRouteId String?              @map("route_port_route_id") @db.Uuid
+  portId           String?              @map("port_id") @db.Uuid
+  customer         Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  sourceArticle    SourceArticle        @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  supplier         Supplier?            @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory          Factory?             @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product          Product?             @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material         Material?            @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  route            Route?               @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  routePort        RoutePort?           @relation(fields: [routePortRouteId, portId, customerId], references: [routeId, portId, customerId], onDelete: Restrict)
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+
+  @@unique([customerId, sourceArticleId, matchKey])
+  @@index([customerId, createdAt])
+  @@index([sourceArticleId])
+  @@index([customerId, entityType])
+  @@map("news_radar_exposures")
 }
 
 model ArticleExtractionLease {
