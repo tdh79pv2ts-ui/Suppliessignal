@@ -118,4 +118,42 @@ describe.sequential('Phase 6 customer exposure with PostgreSQL', () => {
     const original = await db.eventEntityIdentifier.findFirstOrThrow({ where: { eventEntity: { eventId: first.event.id } } });
     await expect(db.eventEntityIdentifier.create({ data: { eventEntityId: second.entities[0]!.id, namespace: original.namespace, identifier: original.identifier, normalizedIdentifier: original.normalizedIdentifier, verificationStatus: 'VERIFIED', provenanceSource: 'fixture', verifiedAt: new Date(), verifiedByUserId: first.reviewer.id } })).resolves.toMatchObject({ verificationStatus: 'VERIFIED' });
   });
+
+  it('recovers after service restart without duplicate logical results', async () => {
+    const item = await fixture();
+    await new CustomerExposureService().reconcileEvent(item.event.id);
+    await new CustomerExposureService().reconcileEvent(item.event.id);
+    const exposure = await db.customerExposure.findUniqueOrThrow({ where: { customerId_eventId: { customerId: item.customer.id, eventId: item.event.id } } });
+    expect(await db.customerExposure.count({ where: { customerId: item.customer.id, eventId: item.event.id } })).toBe(1);
+    expect(await db.exposurePath.count({ where: { exposureId: exposure.id } })).toBe(2);
+  });
+
+  it('matches an exact verified Factory identity', async () => {
+    const item = await fixture({ verified: false });
+    const identifier = `factory-${crypto.randomUUID()}`;
+    await db.customerGraphIdentity.create({ data: { customerId: item.customer.id, subjectType: 'FACTORY', factoryId: item.factory.id, namespace: 'FACILITY_ID', identifier, normalizedIdentifier: identifier, verificationStatus: 'VERIFIED', provenanceSource: 'fixture', verifiedAt: new Date(), verifiedByUserId: item.reviewer.id } });
+    const eventEntity = await db.eventEntity.findFirstOrThrow({ where: { eventId: item.event.id } });
+    await db.eventEntityIdentifier.create({ data: { eventEntityId: eventEntity.id, namespace: 'FACILITY_ID', identifier, normalizedIdentifier: identifier, verificationStatus: 'VERIFIED', provenanceSource: 'fixture', verifiedAt: new Date(), verifiedByUserId: item.reviewer.id } });
+    await service.reconcileEvent(item.event.id);
+    const path = await db.exposurePath.findFirstOrThrow({ where: { exposure: { customerId: item.customer.id, eventId: item.event.id }, exposureType: 'DIRECT_FACTORY' }, include: { steps: true } });
+    expect(path.steps).toHaveLength(1);
+    expect(path.steps[0]!.factoryId).toBe(item.factory.id);
+  });
+
+  it('reconciles an exposure when a verified customer identity is rejected', async () => {
+    const item = await fixture();
+    await service.reconcileEvent(item.event.id);
+    const identity = await db.customerGraphIdentity.findFirstOrThrow({ where: { customerId: item.customer.id, supplierId: item.supplier.id } });
+    await service.setGraphIdentityStatus(item.customer.id, identity.id, item.reviewer.id, false);
+    const paths = await db.exposurePath.findMany({ where: { exposure: { customerId: item.customer.id, eventId: item.event.id }, matchMethod: 'VERIFIED_IDENTIFIER' } });
+    expect(paths.every((path) => !path.activeMatch)).toBe(true);
+  });
+
+  it('customer-scoped detail rejects an exposure ID owned by another customer', async () => {
+    const first = await fixture();
+    const second = await fixture();
+    await service.reconcileEvent(second.event.id);
+    const otherExposure = await db.customerExposure.findUniqueOrThrow({ where: { customerId_eventId: { customerId: second.customer.id, eventId: second.event.id } } });
+    await expect(service.detail(first.customer.id, otherExposure.id)).rejects.toMatchObject({ code: 'EXPOSURE_NOT_FOUND' });
+  });
 });
