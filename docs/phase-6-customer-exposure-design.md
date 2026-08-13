@@ -144,6 +144,7 @@ enum IdentitySubjectType {
 }
 
 enum IdentityVerificationStatus {
+  PROPOSED
   VERIFIED
   UNVERIFIED
   REJECTED
@@ -227,6 +228,7 @@ model ExposurePath {
   updatedAt             DateTime      @updatedAt @map("updated_at")
 
   @@unique([exposureId, pathKey])
+  @@unique([id, customerId])
   @@index([customerId, activeMatch, exposureType])
   @@index([exposureId, decision])
   @@map("exposure_paths")
@@ -254,7 +256,7 @@ model ExposurePathStep {
   labelSnapshot      String           @map("label_snapshot")
   attributesSnapshot Json?            @map("attributes_snapshot")
   activeSnapshot     Boolean?         @map("active_snapshot")
-  path               ExposurePath     @relation(fields: [pathId], references: [id], onDelete: Restrict)
+  path               ExposurePath     @relation(fields: [pathId, customerId], references: [id, customerId], onDelete: Restrict)
 
   @@unique([pathId, sequence])
   @@index([customerId, supplierId])
@@ -297,6 +299,7 @@ model CustomerGraphIdentity {
   updatedAt             DateTime      @updatedAt @map("updated_at")
 
   @@index([namespace, normalizedIdentifier, verificationStatus])
+  @@unique([id, customerId])
   @@index([customerId, supplierId])
   @@index([customerId, factoryId])
   @@index([customerId, productId])
@@ -319,9 +322,12 @@ model EventEntityIdentifier {
   source                String
   sourceReference       String?  @map("source_reference")
   evidenceNote          String?  @map("evidence_note")
+  proposedAt            DateTime? @map("proposed_at")
+  proposedByUserId      String?  @map("proposed_by_user_id") @db.Uuid
+  proposedBy            User?    @relation("EventIdentityProposer", fields: [proposedByUserId], references: [id], onDelete: Restrict)
   verifiedAt            DateTime? @map("verified_at")
   verifiedByUserId      String?  @map("verified_by_user_id") @db.Uuid
-  verifiedBy            User?    @relation(fields: [verifiedByUserId], references: [id], onDelete: Restrict)
+  verifiedBy            User?    @relation("EventIdentityVerifier", fields: [verifiedByUserId], references: [id], onDelete: Restrict)
   createdAt             DateTime @default(now()) @map("created_at")
 
   @@unique([eventEntityId, namespace, normalizedIdentifier])
@@ -351,7 +357,7 @@ model ExposureCandidate {
   customer              Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
   event                 Event    @relation(fields: [eventId], references: [id], onDelete: Restrict)
   reviewedBy            User?    @relation(fields: [reviewedByUserId], references: [id], onDelete: Restrict)
-  resultingIdentity     CustomerGraphIdentity? @relation(fields: [resultingIdentityId], references: [id], onDelete: Restrict)
+  resultingIdentity     CustomerGraphIdentity? @relation(fields: [resultingIdentityId, customerId], references: [id, customerId], onDelete: Restrict)
   nodes                 ExposureCandidateNode[]
   createdAt             DateTime @default(now()) @map("created_at")
   updatedAt             DateTime @updatedAt @map("updated_at")
@@ -459,6 +465,8 @@ CHECK (
 
 Location-only evidence belongs in the path snapshot/anchor rather than masquerading as a live graph subject. Consequently, the database—not only service code—prevents a Customer A path from referencing Customer B data. Immutable snapshots remain mandatory when the referenced node is later archived.
 
+The parent relation is equally tenant-safe: `ExposurePath` has `@@unique([id, customerId])`, and every step uses `(pathId, customerId) → ExposurePath(id, customerId)`. A step cannot claim Customer B while belonging to Customer A's path, even if all its typed graph references would otherwise be valid for Customer B. Together, the composite parent relation and composite typed-node foreign keys make both the path ownership and graph-node ownership database-enforced.
+
 `CustomerGraphIdentity` follows the same typed-reference design. Exactly one of `supplierId`, `factoryId`, `productId`, `materialId`, `routeId`, or `portId` must be non-null, and `subjectType` must agree with it. Composite foreign keys enforce tenant ownership for customer-owned subjects. PostgreSQL `CHECK (num_nonnulls(...) = 1)` enforces the one-subject invariant. Partial unique indexes enforce that one subject cannot have the same namespace/value twice, for example:
 
 ```sql
@@ -472,6 +480,8 @@ Equivalent partial unique indexes are required for Factory, Product, Material, R
 Identity namespaces may include `LEI`, `DUNS`, `VAT`, `UNLOCODE`, `IMO`, or a named authoritative customer master-data namespace. Identifiers must never be invented. A customer-local UUID is not automatically a global identity.
 
 `ExposureCandidate` is the sole persistence target for `AMBIGUOUS`. It is deliberately not a `CustomerExposure`. Candidate graph nodes use typed `ExposureCandidateNode` rows plus the immutable candidate snapshot. The child table has the same `num_nonnulls(...) = 1` constraint and composite tenant-safe foreign keys as path steps. The candidate and child `customerId` must also be tied through a composite candidate relation in the final Prisma model, preventing a node row from claiming a different tenant. Confirmation does not mutate customer graph relationships.
+
+Any identity resulting from candidate review is also tenant-bound. `CustomerGraphIdentity` has `@@unique([id, customerId])`, and `ExposureCandidate.resultingIdentity` uses `(resultingIdentityId, customerId) → CustomerGraphIdentity(id, customerId)`. PostgreSQL therefore rejects a Customer A candidate pointing at a Customer B identity, independently of service authorization.
 
 ## 5. Exposure taxonomy
 
@@ -667,11 +677,19 @@ An authorized reviewer chooses an existing Supplier, Factory, Product, Material,
 
 New records begin `UNVERIFIED` unless an Admin or assigned Reviewer performs the verification action. Verification records `verifiedByUserId` and `verifiedAt`. A person cannot verify a reference for a customer they cannot access. Typed composite foreign keys prove that the selected graph object exists in that customer.
 
-#### Event entity side
+#### Event entity side and global governance
 
-An authorized Admin or assigned Reviewer opens an `EventEntity`, inspects its existing Claim/Article/Source provenance, and submits an authoritative namespace/value plus identifier provenance. `EventEntityIdentifier` links the identifier to the exact EventEntity, optional supporting Claim, source description/reference, evidence note, verifier, and verification timestamp. The supporting Claim must belong to the Event through `EventClaim`, checked transactionally. Verification is a human assertion about identity; it does not alter the Event text or customer graph.
+`EventEntityIdentifier` is global truth: once verified, it can affect deterministic exposure matching for many customers. Phase 6 V1 therefore locks these permissions:
 
-For a Reviewer, Event-entity identity management is reachable only from an ambiguous candidate for one of their assigned customers. Admin may manage global Event identifiers directly. A Reviewer cannot use that workflow to browse unrelated global Events.
+- `ADMIN` may create, verify, reject, or supersede global `EventEntityIdentifier` records.
+- An assigned `REVIEWER` may inspect only the EventEntity provenance reachable from an ambiguous candidate for their customer and submit identifier evidence as a `PROPOSED` record.
+- `REVIEWER` must not directly set a global EventEntity identifier to `VERIFIED`, reject global truth, or supersede an Admin-verified identifier.
+- A Reviewer proposal remains `PROPOSED`/non-matching until an Admin verifies it. `verifiedByUserId` and `verifiedAt` remain null before Admin verification; separate proposer attribution must be retained (`proposedByUserId`, `proposedAt`, or an immutable status-history row).
+- Customer-side `CustomerGraphIdentity` for a reviewer's assigned customer may still be verified by either that assigned Reviewer or Admin because its effect is tenant-scoped.
+
+An Admin or assigned Reviewer inspects the exact Claim/Article/Source provenance and submits an authoritative namespace/value plus provenance. `EventEntityIdentifier` links the identifier to the EventEntity, optional supporting Claim, source description/reference, evidence note, proposer, and eventual Admin verifier. The supporting Claim must belong to the Event through `EventClaim`, checked transactionally. Identity governance does not alter Event text or customer graph relationships, and it does not introduce a customer-specific EventEntity truth model.
+
+Only `VERIFIED` EventEntity identifiers participate in deterministic direct matching. `PROPOSED`, `UNVERIFIED`, or `REJECTED` records may explain review state but cannot produce `MATCH`.
 
 #### Collision and validation rules
 
@@ -699,12 +717,14 @@ GET  /api/customers/:customerId/exposure-candidates/:candidateId
 POST /api/customers/:customerId/exposure-candidates/:candidateId/confirm
 POST /api/customers/:customerId/exposure-candidates/:candidateId/reject
 
+POST /api/customers/:customerId/exposure-candidates/:candidateId/event-identity-proposals
+
 POST /api/admin/event-entities/:eventEntityId/identifiers
 POST /api/admin/event-entity-identifiers/:identifierId/verify
 POST /api/admin/event-entity-identifiers/:identifierId/reject
 ```
 
-Candidate confirmation accepts the authoritative identifier/provenance and intended typed customer subject. The transaction verifies reviewer membership, candidate version, EventEntity linkage, subject tenant ownership, namespace rules, and collisions; then writes/verifies both sides as appropriate and enqueues reconciliation. It never attaches a Factory, Product, Route, or other graph edge.
+Candidate confirmation accepts the customer graph identity/provenance and intended typed customer subject. An assigned Reviewer may verify that tenant-scoped `CustomerGraphIdentity` and separately submit a global Event identity proposal. The transaction verifies membership, candidate version, EventEntity linkage, subject tenant ownership, namespace rules, and collisions. Normal deterministic reconciliation is queued only when both sides contain matching `VERIFIED` identifiers; an Admin verification of the global proposal provides that trigger. The workflow never attaches a Factory, Product, Route, or other graph edge.
 
 ## 9. Exposure confidence
 
@@ -886,6 +906,13 @@ GET  /api/admin/exposure-work-items
 
 Identity and ambiguous-candidate APIs are defined in the onboarding section. Candidate list/detail/confirm/reject routes require `ADMIN` or an assigned `REVIEWER`; `CUSTOMER` receives `403` and the candidate must not be included inside the normal exposure list/detail envelope.
 
+Identity API authorization is explicit:
+
+- Assigned Reviewer may create/manage/verify `CustomerGraphIdentity` only for the assigned customer, inspect candidate-bounded Event provenance, and submit an Event identity proposal.
+- Reviewer cannot call global Event identifier verify/reject/supersede operations and cannot set `verificationStatus=VERIFIED` through proposal payloads.
+- Admin may create global Event identifiers directly and is the only role that can verify, reject, or supersede them.
+- Both Admin and assigned Reviewer may review ambiguous candidates and confirm/dismiss exposures; `CUSTOMER` may do neither.
+
 Reconciliation returns `202`. List filters include status, exposure type, Event type, severity, supplier, factory, port, route, date range, minimum match confidence, page, and page size. IDs in filters are always checked within the requested customer.
 
 Detail includes exposure lifecycle, separate Event and exposure confidence, active and historical paths, deterministic reasons, bounded Event provenance, and review metadata. It excludes lease tokens, unrestricted candidate sets, and other tenants’ metadata.
@@ -927,6 +954,7 @@ requireAuth → validate customerId → requireCustomerAccess
 - `ADMIN`: platform-wide access.
 - Confirmation/dismissal belongs only to `ADMIN` and assigned `REVIEWER`.
 - Ambiguous candidates and identity-onboarding UI/API are visible only to `ADMIN` and assigned `REVIEWER`, never `CUSTOMER`.
+- Global `EventEntityIdentifier` verification/rejection/supersession is Admin-only because its result can affect many customers. Assigned Reviewers can submit `PROPOSED` evidence only through their customer candidate scope.
 - Customer exposure detail may return only bounded provenance for its Event; it must not grant `CUSTOMER` access to the unrestricted global Event corpus.
 - Every path, node lookup, filter, export, and worker write includes `customerId`.
 - Logs contain IDs, controlled decisions, timings, and safe error codes—not graph snapshots, evidence bodies, customer master data, tokens, or secrets.
@@ -1060,6 +1088,13 @@ Migration tests cover a clean deploy and an upgrade from the Phase 5 migration s
 25. **Conflicting identifiers**: collision/conflicting mappings produce an ambiguous collision record and never silently match.
 26. **Identity provenance audit**: creation, verification, verifier, timestamp, source/reference, rejection/supersession, and supporting Claim remain inspectable.
 27. **Exposure version materiality**: entity identity, matching location, assertion semantics, Event type, and exposure-affecting lifecycle changes increment `Event.exposureVersion` once per transaction; title, summary, counts, confidence, severity, or timestamps alone do not.
+28. **Cross-tenant path parent**: direct SQL attempts to insert a Customer B `ExposurePathStep` under Customer A `ExposurePath` → composite `(pathId, customerId)` foreign-key rejection, even when the referenced graph node belongs to Customer B.
+29. **Cross-tenant resulting identity**: direct SQL attempts to link Customer A `ExposureCandidate` to Customer B `CustomerGraphIdentity` → composite `(resultingIdentityId, customerId)` foreign-key rejection.
+30. **Reviewer global verification denied**: assigned Reviewer calling global `EventEntityIdentifier` verify/reject/supersede → `403`, with no status change.
+31. **Reviewer proposal accepted**: assigned Reviewer submits candidate-bounded identifier evidence → auditable `PROPOSED` record with proposer attribution, not `VERIFIED`.
+32. **Admin verifies proposal**: Admin verifies the proposed global identifier → status `VERIFIED`, Admin verifier/timestamp recorded, and material Event reconciliation queued.
+33. **Unverified identifier cannot match**: matching CustomerGraphIdentity plus `PROPOSED`, `UNVERIFIED`, or `REJECTED` EventEntityIdentifier → no deterministic direct exposure `MATCH`.
+34. **Verified identifier matches normally**: after Admin verification, the same authoritative identifier may produce the normal deterministic `MATCH` and exposure reconciliation.
 
 ### Additional unit tests
 
@@ -1086,6 +1121,9 @@ Migration tests cover a clean deploy and an upgrade from the Phase 5 migration s
 - database rejects every typed cross-customer path-step and identity reference;
 - database enforces exactly one typed subject and matching subject/node type;
 - candidate confirmation/rejection transactions remain atomic with identity provenance and work enqueueing.
+- database rejects a step whose `customerId` differs from its parent ExposurePath through the composite parent foreign key;
+- database rejects a candidate whose resulting identity belongs to another customer through the composite identity foreign key;
+- global Event identity proposal and Admin verification preserve proposer/verifier history and trigger matching only after verification.
 
 ### PostgreSQL concurrency tests
 
@@ -1136,8 +1174,11 @@ The following choices are locked for Phase 6:
 4. Minimal human-managed identity onboarding is in scope, with no AI guessing, fuzzy automatic resolution, invented identifiers, or graph mutation.
 5. Customer graph changes reconcile against all unresolved Events.
 6. Granularity is one `CustomerExposure` per Customer × Event with multiple `ExposurePath` records.
+7. Global EventEntity identity governance is Admin-controlled: assigned Reviewers may propose evidence, but only Admin may create globally verified truth or verify/reject/supersede proposals.
 
 No material product decisions remain open in this revision. Any future proposal to change these semantics requires explicit approval and a design/version update.
+
+No unresolved Phase 6 design decisions remain.
 
 ## 26. Decisions requiring approval
 
