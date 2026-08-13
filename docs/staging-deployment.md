@@ -142,12 +142,12 @@ Set only these Vercel variables for the stable staging environment:
 
 ```text
 VITE_API_URL=https://<stable-railway-api-domain>/api
-VITE_SUPABASE_URL=https://<staging-project-ref>.supabase.co
-VITE_SUPABASE_ANON_KEY=<staging anon key>
+NEXT_PUBLIC_SUPABASE_URL=https://<staging-project-ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<staging anon key>
 VITE_APP_ENV=staging
 ```
 
-Vite variables are compiled into public browser assets. Never add `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, or any password with a `VITE_` prefix. `VITE_APP_ENV=staging` renders the small STAGING badge; production omits it.
+`NEXT_PUBLIC_*` and `VITE_*` variables are compiled into public browser assets. Never add `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, or any password with either public prefix. The Supabase publishable/anon key is intentionally browser-safe; a service-role key is not. `VITE_APP_ENV=staging` renders the small STAGING badge; production omits it.
 
 Use one stable Vercel deployment URL. Random preview domains are deliberately not trusted by API CORS. Promoting a new revision to the same stable staging domain avoids broadening that boundary.
 
