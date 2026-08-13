@@ -132,7 +132,6 @@ enum ExposureNodeType {
   MATERIAL
   ROUTE
   PORT
-  LOCATION
 }
 
 enum IdentitySubjectType {
@@ -161,6 +160,13 @@ enum ExposureWorkStatus {
   PROCESSING
   COMPLETED
   FAILED
+}
+
+enum ExposureCandidateReviewStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+  SUPERSEDED
 }
 
 model CustomerExposure {
@@ -232,15 +238,31 @@ model ExposurePathStep {
   pathId             String           @map("path_id") @db.Uuid
   sequence           Int
   nodeType           ExposureNodeType @map("node_type")
-  nodeId             String?          @map("node_id") @db.Uuid
   edgeFromPrevious   String?          @map("edge_from_previous")
+  supplierId         String?          @map("supplier_id") @db.Uuid
+  factoryId          String?          @map("factory_id") @db.Uuid
+  productId          String?          @map("product_id") @db.Uuid
+  materialId         String?          @map("material_id") @db.Uuid
+  routeId            String?          @map("route_id") @db.Uuid
+  portId             String?          @map("port_id") @db.Uuid
+  supplier           Supplier?        @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory            Factory?         @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product            Product?         @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material           Material?        @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  route              Route?           @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  port               Port?            @relation(fields: [portId], references: [id], onDelete: Restrict)
   labelSnapshot      String           @map("label_snapshot")
   attributesSnapshot Json?            @map("attributes_snapshot")
   activeSnapshot     Boolean?         @map("active_snapshot")
   path               ExposurePath     @relation(fields: [pathId], references: [id], onDelete: Restrict)
 
   @@unique([pathId, sequence])
-  @@index([customerId, nodeType, nodeId])
+  @@index([customerId, supplierId])
+  @@index([customerId, factoryId])
+  @@index([customerId, productId])
+  @@index([customerId, materialId])
+  @@index([customerId, routeId])
+  @@index([portId])
   @@map("exposure_path_steps")
 }
 
@@ -248,38 +270,120 @@ model CustomerGraphIdentity {
   id                    String        @id @default(uuid()) @db.Uuid
   customerId            String        @map("customer_id") @db.Uuid
   subjectType           IdentitySubjectType @map("subject_type")
-  subjectId             String        @map("subject_id") @db.Uuid
+  supplierId            String?       @map("supplier_id") @db.Uuid
+  factoryId             String?       @map("factory_id") @db.Uuid
+  productId             String?       @map("product_id") @db.Uuid
+  materialId            String?       @map("material_id") @db.Uuid
+  routeId               String?       @map("route_id") @db.Uuid
+  portId                String?       @map("port_id") @db.Uuid
   namespace             String
   identifier            String
   normalizedIdentifier  String        @map("normalized_identifier")
   verificationStatus    IdentityVerificationStatus @map("verification_status")
   source                String
+  sourceReference       String?       @map("source_reference")
+  evidenceNote          String?       @map("evidence_note")
   verifiedAt            DateTime?     @map("verified_at")
   verifiedByUserId      String?       @map("verified_by_user_id") @db.Uuid
   customer              Customer      @relation(fields: [customerId], references: [id], onDelete: Restrict)
   verifiedBy            User?         @relation(fields: [verifiedByUserId], references: [id], onDelete: Restrict)
+  supplier              Supplier?     @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory               Factory?      @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product               Product?      @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material              Material?     @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  route                 Route?        @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  port                  Port?         @relation(fields: [portId], references: [id], onDelete: Restrict)
   createdAt             DateTime      @default(now()) @map("created_at")
   updatedAt             DateTime      @updatedAt @map("updated_at")
 
-  @@unique([customerId, subjectType, subjectId, namespace, normalizedIdentifier])
   @@index([namespace, normalizedIdentifier, verificationStatus])
-  @@index([customerId, subjectType, subjectId])
+  @@index([customerId, supplierId])
+  @@index([customerId, factoryId])
+  @@index([customerId, productId])
+  @@index([customerId, materialId])
+  @@index([customerId, routeId])
+  @@index([portId])
   @@map("customer_graph_identities")
 }
 
 model EventEntityIdentifier {
   id                    String   @id @default(uuid()) @db.Uuid
   eventEntityId         String   @map("event_entity_id") @db.Uuid
+  eventEntity           EventEntity @relation(fields: [eventEntityId], references: [id], onDelete: Cascade)
   namespace             String
   identifier            String
   normalizedIdentifier  String   @map("normalized_identifier")
   sourceClaimId         String?  @map("source_claim_id") @db.Uuid
+  sourceClaim           Claim?   @relation(fields: [sourceClaimId], references: [id], onDelete: Restrict)
   verificationStatus    IdentityVerificationStatus @map("verification_status")
+  source                String
+  sourceReference       String?  @map("source_reference")
+  evidenceNote          String?  @map("evidence_note")
+  verifiedAt            DateTime? @map("verified_at")
+  verifiedByUserId      String?  @map("verified_by_user_id") @db.Uuid
+  verifiedBy            User?    @relation(fields: [verifiedByUserId], references: [id], onDelete: Restrict)
   createdAt             DateTime @default(now()) @map("created_at")
 
   @@unique([eventEntityId, namespace, normalizedIdentifier])
   @@index([namespace, normalizedIdentifier, verificationStatus])
   @@map("event_entity_identifiers")
+}
+
+model ExposureCandidate {
+  id                    String   @id @default(uuid()) @db.Uuid
+  customerId            String   @map("customer_id") @db.Uuid
+  eventId               String   @map("event_id") @db.Uuid
+  candidateKey          String   @map("candidate_key")
+  status                ExposureCandidateReviewStatus @default(PENDING)
+  matchConfidence       Decimal  @map("match_confidence") @db.Decimal(4, 3)
+  matchMethods          ExposureMatchMethod[] @map("match_methods")
+  reasonCodes           String[] @map("reason_codes")
+  eventEntityIds        String[] @map("event_entity_ids") @db.Uuid
+  eventLocationIds      String[] @map("event_location_ids") @db.Uuid
+  candidateSnapshot     Json     @map("candidate_snapshot")
+  exposurePolicyVersion String   @map("exposure_policy_version")
+  graphRevision         BigInt   @map("graph_revision")
+  eventVersion          Int      @map("event_version")
+  reviewedByUserId      String?  @map("reviewed_by_user_id") @db.Uuid
+  reviewedAt            DateTime? @map("reviewed_at")
+  reviewReasonCode      String?  @map("review_reason_code")
+  resultingIdentityId   String?  @map("resulting_identity_id") @db.Uuid
+  customer              Customer @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  event                 Event    @relation(fields: [eventId], references: [id], onDelete: Restrict)
+  reviewedBy            User?    @relation(fields: [reviewedByUserId], references: [id], onDelete: Restrict)
+  resultingIdentity     CustomerGraphIdentity? @relation(fields: [resultingIdentityId], references: [id], onDelete: Restrict)
+  nodes                 ExposureCandidateNode[]
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@unique([customerId, eventId, candidateKey, exposurePolicyVersion])
+  @@unique([id, customerId])
+  @@index([customerId, status, updatedAt])
+  @@index([eventId, status])
+  @@map("exposure_candidates")
+}
+
+model ExposureCandidateNode {
+  id             String   @id @default(uuid()) @db.Uuid
+  customerId     String   @map("customer_id") @db.Uuid
+  candidateId    String   @map("candidate_id") @db.Uuid
+  supplierId     String?  @map("supplier_id") @db.Uuid
+  factoryId      String?  @map("factory_id") @db.Uuid
+  productId      String?  @map("product_id") @db.Uuid
+  materialId     String?  @map("material_id") @db.Uuid
+  routeId        String?  @map("route_id") @db.Uuid
+  portId         String?  @map("port_id") @db.Uuid
+  candidate      ExposureCandidate @relation(fields: [candidateId, customerId], references: [id, customerId], onDelete: Cascade)
+  supplier       Supplier? @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory        Factory?  @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product        Product?  @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material       Material? @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  route          Route?    @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  port           Port?     @relation(fields: [portId], references: [id], onDelete: Restrict)
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@index([customerId, candidateId])
+  @@map("exposure_candidate_nodes")
 }
 
 model ExposureRevision {
@@ -339,9 +443,35 @@ model Event {
 
 `CustomerExposure` is the customer-level lifecycle record. Multiple affected assets become paths rather than duplicate customer/Event records. `pathKey` is a deterministic hash over policy version, exposure type, ordered node IDs/types, ordered edge types, match method, and matching Event entity/location ID. Confidence is excluded from the identity key.
 
-`ExposurePathStep.nodeId` is polymorphic and cannot have one foreign key. The service must validate every live reference inside a customer-scoped transaction. The composite `CustomerExposure(id, customerId)` relationship and path-level `customerId` constrain the tenant boundary. Immutable snapshots preserve auditability if a live node is later archived or unavailable. A wider model with nullable typed foreign keys can be chosen during implementation if database-enforced step references are preferred.
+`ExposurePathStep` uses typed nullable references as the authoritative live references. Every customer-owned reference has a composite foreign key `(entityId, customerId) → Entity(id, customerId)`. `Port` remains global and uses `portId → Port.id`. PostgreSQL must also receive a migration-level `CHECK` constraint requiring exactly one typed subject and requiring that `nodeType` agrees with that non-null column:
+
+```sql
+CHECK (num_nonnulls(supplier_id, factory_id, product_id, material_id, route_id, port_id) = 1)
+CHECK (
+  (node_type = 'SUPPLIER' AND supplier_id IS NOT NULL) OR
+  (node_type = 'FACTORY'  AND factory_id  IS NOT NULL) OR
+  (node_type = 'PRODUCT'  AND product_id  IS NOT NULL) OR
+  (node_type = 'MATERIAL' AND material_id IS NOT NULL) OR
+  (node_type = 'ROUTE'    AND route_id    IS NOT NULL) OR
+  (node_type = 'PORT'     AND port_id     IS NOT NULL)
+)
+```
+
+Location-only evidence belongs in the path snapshot/anchor rather than masquerading as a live graph subject. Consequently, the database—not only service code—prevents a Customer A path from referencing Customer B data. Immutable snapshots remain mandatory when the referenced node is later archived.
+
+`CustomerGraphIdentity` follows the same typed-reference design. Exactly one of `supplierId`, `factoryId`, `productId`, `materialId`, `routeId`, or `portId` must be non-null, and `subjectType` must agree with it. Composite foreign keys enforce tenant ownership for customer-owned subjects. PostgreSQL `CHECK (num_nonnulls(...) = 1)` enforces the one-subject invariant. Partial unique indexes enforce that one subject cannot have the same namespace/value twice, for example:
+
+```sql
+CREATE UNIQUE INDEX customer_graph_identity_supplier_key
+ON customer_graph_identities(customer_id, supplier_id, namespace, normalized_identifier)
+WHERE supplier_id IS NOT NULL;
+```
+
+Equivalent partial unique indexes are required for Factory, Product, Material, Route, and Port. A verified identifier collision within the same namespace is rejected or moved to explicit review; it never silently maps two authoritative identities.
 
 Identity namespaces may include `LEI`, `DUNS`, `VAT`, `UNLOCODE`, `IMO`, or a named authoritative customer master-data namespace. Identifiers must never be invented. A customer-local UUID is not automatically a global identity.
+
+`ExposureCandidate` is the sole persistence target for `AMBIGUOUS`. It is deliberately not a `CustomerExposure`. Candidate graph nodes use typed `ExposureCandidateNode` rows plus the immutable candidate snapshot. The child table has the same `num_nonnulls(...) = 1` constraint and composite tenant-safe foreign keys as path steps. The candidate and child `customerId` must also be tied through a composite candidate relation in the final Prisma model, preventing a node row from claiming a different tenant. Confirmation does not mutate customer graph relationships.
 
 ## 5. Exposure taxonomy
 
@@ -421,6 +551,16 @@ type ExposureMatchResult =
       policyVersion: string;
     };
 ```
+
+Persistence semantics are strict:
+
+```text
+MATCH      → may create/update CustomerExposure and ExposurePath
+AMBIGUOUS  → upsert ExposureCandidate only; never create CustomerExposure
+NO_MATCH   → no CustomerExposure and no candidate, apart from safe processing telemetry
+```
+
+An assigned Reviewer or Admin may `CONFIRM` a candidate only by selecting/providing an authoritative namespaced identifier and its provenance. Confirmation creates or verifies the relevant typed identity record, marks the candidate `CONFIRMED`, and enqueues normal deterministic reconciliation. Only that later `MATCH` may create an exposure. `REJECT` records reviewer, time, controlled reason and status `REJECTED`; the same unchanged candidate key remains rejected. Materially new Event/graph evidence creates or supersedes a versioned candidate rather than erasing review history.
 
 Controlled reason codes:
 
@@ -510,6 +650,62 @@ City never matches without country. Region never matches without country. Countr
 | Country only | `AMBIGUOUS` |
 | City without country | `NO_MATCH` |
 
+### Identity onboarding and verification workflow
+
+Minimal human-managed identity onboarding is in scope for Phase 6. It is deterministic and available only to `ADMIN` and a `REVIEWER` assigned to the affected customer. There is no AI guessing, fuzzy automatic resolution, invented identifier, or automatic graph mutation.
+
+#### Customer graph side
+
+An authorized reviewer chooses an existing Supplier, Factory, Product, Material, Route, or relevant global Port from a customer-scoped selector and submits:
+
+- controlled namespace;
+- original identifier and normalized identifier;
+- provenance type/source, such as customer ERP, official registry, carrier master data, UN/LOCODE registry, or reviewed contract/master-data record;
+- source reference URL/document reference where permitted;
+- evidence note;
+- requested status.
+
+New records begin `UNVERIFIED` unless an Admin or assigned Reviewer performs the verification action. Verification records `verifiedByUserId` and `verifiedAt`. A person cannot verify a reference for a customer they cannot access. Typed composite foreign keys prove that the selected graph object exists in that customer.
+
+#### Event entity side
+
+An authorized Admin or assigned Reviewer opens an `EventEntity`, inspects its existing Claim/Article/Source provenance, and submits an authoritative namespace/value plus identifier provenance. `EventEntityIdentifier` links the identifier to the exact EventEntity, optional supporting Claim, source description/reference, evidence note, verifier, and verification timestamp. The supporting Claim must belong to the Event through `EventClaim`, checked transactionally. Verification is a human assertion about identity; it does not alter the Event text or customer graph.
+
+For a Reviewer, Event-entity identity management is reachable only from an ambiguous candidate for one of their assigned customers. Admin may manage global Event identifiers directly. A Reviewer cannot use that workflow to browse unrelated global Events.
+
+#### Collision and validation rules
+
+- Namespace must come from a controlled registry with namespace-specific Zod validation and normalization.
+- Identifier must be non-empty, length-bounded, and canonical for its namespace.
+- Source/provenance and verifier attribution are required for `VERIFIED`.
+- A verified Event identifier may not point to conflicting Event entities without explicit collision review.
+- A verified customer identifier may not silently identify multiple different subjects in the same customer and namespace.
+- Global identifiers intended to be unique, such as LEI or UN/LOCODE, receive database uniqueness appropriate to that namespace.
+- Tenant-local master identifiers include their authoritative owner namespace; equal raw values under different owners are not equal identities.
+- Conflicts produce `AMBIGUOUS_ENTITY_IDENTITY`/collision review, never an automatic match.
+- Verification, rejection, replacement, and supersession remain auditable; records are not overwritten destructively.
+
+Proposed APIs:
+
+```text
+GET  /api/customers/:customerId/graph-identities
+POST /api/customers/:customerId/graph-identities
+GET  /api/customers/:customerId/graph-identities/:identityId
+POST /api/customers/:customerId/graph-identities/:identityId/verify
+POST /api/customers/:customerId/graph-identities/:identityId/reject
+
+GET  /api/customers/:customerId/exposure-candidates
+GET  /api/customers/:customerId/exposure-candidates/:candidateId
+POST /api/customers/:customerId/exposure-candidates/:candidateId/confirm
+POST /api/customers/:customerId/exposure-candidates/:candidateId/reject
+
+POST /api/admin/event-entities/:eventEntityId/identifiers
+POST /api/admin/event-entity-identifiers/:identifierId/verify
+POST /api/admin/event-entity-identifiers/:identifierId/reject
+```
+
+Candidate confirmation accepts the authoritative identifier/provenance and intended typed customer subject. The transaction verifies reviewer membership, candidate version, EventEntity linkage, subject tenant ownership, namespace rules, and collisions; then writes/verifies both sides as appropriate and enqueues reconciliation. It never attaches a Factory, Product, Route, or other graph edge.
+
 ## 9. Exposure confidence
 
 Exposure confidence measures identity/path certainty and remains separate from Event confidence.
@@ -572,9 +768,28 @@ Auditability takes precedence over storage convenience.
 
 ## 11. Event-triggered processing
 
-Material Event changes enqueue `EVENT_CHANGED(eventId, eventVersion)` transactionally.
+Material Event changes enqueue `EVENT_CHANGED(eventId, eventVersion)` transactionally. The future implementation must centralize the decision in one pure `classifyExposureMaterialEventChange(before, after, relationChanges)` rule used by every Event mutation path. No handler or worker may increment the version ad hoc.
 
-Material changes include Event creation; entity, identifier, or location changes; lifecycle changes; and matching evidence changes. Confidence-only changes, title/summary wording, Claim counts, or provenance additions without identity/location changes do not alter exposure identity.
+`Event.exposureVersion` increments exactly once in the same transaction when at least one matching-material change occurs:
+
+- an EventEntity is added, removed, retyped, or its normalized matching identity changes;
+- an `EventEntityIdentifier` is verified, rejected, added, removed, superseded, or changes namespace/value;
+- an EventLocation is added, removed, or changes matching-relevant country, region, city, coordinates, type, or normalized key;
+- assertion or matching semantics change in a way that changes eligibility or interpretation;
+- Event type changes;
+- lifecycle changes between unresolved and `RESOLVED`/`CANCELLED`, or reactivation changes exposure lifecycle;
+- conflict/matching semantics change when exposure policy explicitly treats that state as eligibility material.
+
+It does **not** increment for presentation/aggregation-only changes:
+
+- title or summary wording;
+- supporting Claim/article/source counts;
+- `firstSeenAt`/`lastSeenAt` alone;
+- confidence alone;
+- severity alone;
+- provenance additions whose identities, locations, assertion semantics, and lifecycle are unchanged.
+
+If one transaction makes several material edits, the version increments once. The work item deduplication key contains the resulting version. Tests for every Event mutation route must prove it delegates to the centralized classifier.
 
 Processing:
 
@@ -669,6 +884,8 @@ POST /api/events/:eventId/reconcile-exposures
 GET  /api/admin/exposure-work-items
 ```
 
+Identity and ambiguous-candidate APIs are defined in the onboarding section. Candidate list/detail/confirm/reject routes require `ADMIN` or an assigned `REVIEWER`; `CUSTOMER` receives `403` and the candidate must not be included inside the normal exposure list/detail envelope.
+
 Reconciliation returns `202`. List filters include status, exposure type, Event type, severity, supplier, factory, port, route, date range, minimum match confidence, page, and page size. IDs in filters are always checked within the requested customer.
 
 Detail includes exposure lifecycle, separate Event and exposure confidence, active and historical paths, deterministic reasons, bounded Event provenance, and review metadata. It excludes lease tokens, unrestricted candidate sets, and other tenants’ metadata.
@@ -694,7 +911,7 @@ Detail sections:
 2. **Why it may matter to you** — exposure lifecycle, separate match confidence, direct/indirect/geographic label, reason codes rendered as text, ordered graph path, and stale/archive warnings.
 3. **Evidence** — Claims, evidence text, articles, original source URLs, and Sources.
 
-Ambiguous candidates belong in an explicit review state and must not look confirmed. No alert controls, risk score, recommendation, or fake actions are added.
+Ambiguous candidates have a separate review screen visible only to `ADMIN` and assigned `REVIEWER`. It shows candidate nodes, signals, reason codes, Event evidence, identifier provenance fields, graph/Event versions, and Confirm/Reject actions. Confirm requires an authoritative identity and provenance; Reject requires a controlled reason. Candidates never appear in the Customer exposure list. No alert controls, risk score, recommendation, or fake actions are added.
 
 ## 19. Tenant authorization and security review
 
@@ -708,7 +925,8 @@ requireAuth → validate customerId → requireCustomerAccess
 - `CUSTOMER`: only customers represented by membership.
 - `REVIEWER`: only customers represented by membership; no global customer access.
 - `ADMIN`: platform-wide access.
-- Confirmation/dismissal initially belongs to `ADMIN` and assigned `REVIEWER`, pending product approval.
+- Confirmation/dismissal belongs only to `ADMIN` and assigned `REVIEWER`.
+- Ambiguous candidates and identity-onboarding UI/API are visible only to `ADMIN` and assigned `REVIEWER`, never `CUSTOMER`.
 - Customer exposure detail may return only bounded provenance for its Event; it must not grant `CUSTOMER` access to the unrestricted global Event corpus.
 - Every path, node lookup, filter, export, and worker write includes `customerId`.
 - Logs contain IDs, controlled decisions, timings, and safe error codes—not graph snapshots, evidence bodies, customer master data, tokens, or secrets.
@@ -756,7 +974,9 @@ Location should use normalized `countryCode`, `regionKey`, `cityKey`, latitude, 
 - `(customerId, countryCode, regionKey, cityKey)`
 - `(eventId, status)` on exposures
 - `(customerId, status, lastMatchedAt)` on exposures
-- `(customerId, nodeType, nodeId)` on path steps
+- typed path-step indexes `(customerId, supplierId)`, `(customerId, factoryId)`, `(customerId, productId)`, `(customerId, materialId)`, `(customerId, routeId)`, and global `(portId)`
+- typed identity partial unique indexes per subject and `(namespace, normalizedIdentifier, verificationStatus)` candidate lookup
+- `(customerId, status, updatedAt)` on ambiguous candidates
 - `(status, nextAttemptAt, createdAt)` on work items
 
 V1 can use bounded latitude/longitude boxes followed by deterministic Haversine verification. PostGIS is optional later.
@@ -778,8 +998,8 @@ No reset or destructive backfill.
 1. Add enums.
 2. Add `Customer.graphRevision` defaulting to `0`.
 3. Add `Event.exposureVersion` defaulting to `1`.
-4. Add identity, exposure, path, revision, and work tables.
-5. Add indexes and unique constraints.
+4. Add typed identity, exposure, typed path-step, ambiguous-candidate, revision, and work tables.
+5. Add composite tenant foreign keys, one-subject `CHECK` constraints, typed partial unique indexes, and remaining indexes/unique constraints.
 6. Deploy code capable of reading empty Phase 6 tables.
 7. Begin transactional graph/Event revision increments and work enqueueing.
 8. Start the ExposureWorker only after validation.
@@ -828,6 +1048,18 @@ Migration tests cover a clean deploy and an upgrade from the Phase 5 migration s
 13. **Customer removes/archives Supplier after exposure**: current path becomes inactive/stale as appropriate, while immutable path and exposure history remain inspectable.
 14. **Event resolves**: exposure becomes `RESOLVED` without deletion; provenance and path history remain.
 15. **Event confidence changes**: exposure path identity remains stable unless Event entity/location matching evidence changes; Event and exposure confidence remain separate.
+16. **Cross-tenant path reference**: direct SQL attempts to attach Customer A `ExposurePathStep` to Customer B Factory → composite foreign key rejection.
+17. **Cross-tenant identity reference**: direct SQL attempts to attach Customer A `CustomerGraphIdentity` to Customer B Supplier → composite foreign key rejection.
+18. **Exactly one typed path-step subject**: zero or two typed IDs, or a `nodeType`/column mismatch → database `CHECK` rejection.
+19. **Ambiguity persists separately**: `AMBIGUOUS` creates/updates `ExposureCandidate` and creates no `CustomerExposure`.
+20. **Candidate authorization**: `CUSTOMER` cannot list or fetch ambiguous candidates; assigned Reviewer and Admin can.
+21. **Reviewer confirms candidate**: confirmation records reviewer/provenance, creates or verifies the typed identity mapping, marks the candidate confirmed, and queues reconciliation; only subsequent deterministic `MATCH` creates exposure.
+22. **Reviewer rejects candidate**: rejection records reviewer/time/reason, creates no identity/exposure, and remains stable on unchanged reprocessing.
+23. **Verified identity on both sides**: verified `EventEntityIdentifier(namespace, value)` equals verified typed `CustomerGraphIdentity(namespace, value)` → deterministic match.
+24. **Name-only EventEntity**: matching normalized name without authoritative identifier/discriminator → no automatic match.
+25. **Conflicting identifiers**: collision/conflicting mappings produce an ambiguous collision record and never silently match.
+26. **Identity provenance audit**: creation, verification, verifier, timestamp, source/reference, rejection/supersession, and supporting Claim remain inspectable.
+27. **Exposure version materiality**: entity identity, matching location, assertion semantics, Event type, and exposure-affecting lifecycle changes increment `Event.exposureVersion` once per transaction; title, summary, counts, confidence, severity, or timestamps alone do not.
 
 ### Additional unit tests
 
@@ -851,6 +1083,9 @@ Migration tests cover a clean deploy and an upgrade from the Phase 5 migration s
 - existing Phase 1–5 provenance remains reachable;
 - work lease expiry and recovery;
 - no duplicate exposure/path/revision under retry.
+- database rejects every typed cross-customer path-step and identity reference;
+- database enforces exactly one typed subject and matching subject/node type;
+- candidate confirmation/rejection transactions remain atomic with identity provenance and work enqueueing.
 
 ### PostgreSQL concurrency tests
 
@@ -891,13 +1126,21 @@ Explicitly out of scope:
 
 An Event severity of `HIGH` and exposure confidence of `0.95` does not mean customer risk is `95`.
 
-## 25. Decisions requiring approval
+## 25. Approved product and architecture decisions
 
-1. **Ambiguity visibility**: show ambiguous candidates only to `ADMIN`/assigned `REVIEWER`, or also to customers under an explicit “Needs review” label? Recommended: reviewer/admin only initially.
-2. **Who may confirm/dismiss**: limit review transitions to `ADMIN` and assigned `REVIEWER`, or allow customer members to manage their own exposure state? Recommended: admin/reviewer initially.
-3. **Country-only candidates**: keep country-only geography `AMBIGUOUS` by default, or create low-confidence `POTENTIAL` exposure? Recommended: ambiguous.
-4. **Identity onboarding scope**: include a minimal human-managed identity mapping interface in Phase 6? Recommended: yes, without automatic discovery.
-5. **Historic reconciliation horizon**: graph changes should examine all unresolved Events or also recent resolved Events? Recommended: all unresolved Events only, with resolved history handled by explicit reconciliation.
-6. **Path granularity**: one customer/Event exposure with multiple paths versus one exposure per path. Recommended: one customer/Event exposure with multiple paths to keep lifecycle and future alert semantics coherent.
+The following choices are locked for Phase 6:
+
+1. Ambiguous candidates are visible only to `ADMIN` and a `REVIEWER` assigned to the customer; never to `CUSTOMER`.
+2. Exposure confirmation and dismissal are allowed only for `ADMIN` and assigned `REVIEWER`.
+3. Country-only geographic correlation is `AMBIGUOUS` by default and does not create a CustomerExposure.
+4. Minimal human-managed identity onboarding is in scope, with no AI guessing, fuzzy automatic resolution, invented identifiers, or graph mutation.
+5. Customer graph changes reconcile against all unresolved Events.
+6. Granularity is one `CustomerExposure` per Customer × Event with multiple `ExposurePath` records.
+
+No material product decisions remain open in this revision. Any future proposal to change these semantics requires explicit approval and a design/version update.
+
+## 26. Decisions requiring approval
+
+None. The previously open semantic choices are approved and locked in the preceding section.
 
 No Phase 6 implementation, migration, risk scoring, alerts, or future-phase functionality is authorized by this design document.
