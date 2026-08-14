@@ -1,13 +1,17 @@
 import { Router, type NextFunction, type Request, type Response, type Router as ExpressRouter } from 'express';
 import {
   customerParamsSchema,
+  dailyBriefDateSchema,
+  newsletterPreferenceSchema,
   newsRadarArticleParamsSchema,
   newsRadarExposureParamsSchema,
   newsRadarListSchema,
   type NewsRadarListInput,
+  type NewsletterPreferenceInput,
 } from '@suppliesignal/shared';
 import { requireAuth, requireCustomerAccess, requireRole, type ResolveUser } from '../auth.js';
 import { newsRadarService, type NewsRadarService } from '../services/news-radar.js';
+import { dailyBriefService, type DailyBriefService } from '../services/daily-brief.js';
 
 const asyncHandler = (fn: (request: Request, response: Response) => Promise<void>) =>
   (request: Request, response: Response, next: NextFunction) => void fn(request, response).catch(next);
@@ -24,6 +28,7 @@ function parse<T>(schema: { safeParse(value: unknown): { success: true; data: T 
 export function createNewsRadarRouter(
   resolveUser: ResolveUser,
   service: NewsRadarService = newsRadarService,
+  briefs: DailyBriefService = dailyBriefService,
 ): ExpressRouter {
   const router = Router();
   router.use(requireAuth(resolveUser));
@@ -44,6 +49,24 @@ export function createNewsRadarRouter(
   router.get('/customers/:customerId/news-radar/exposures/:exposureId', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(newsRadarExposureParamsSchema, request.params, response);
     if (params) response.json({ data: await service.getExposure(params.customerId, params.exposureId) });
+  }));
+  router.get('/customers/:customerId/daily-brief', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    if (params) response.json({ data: await briefs.latest(params.customerId) });
+  }));
+  router.post('/customers/:customerId/daily-brief/generate', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    const body = parse(dailyBriefDateSchema, request.body, response);
+    if (params && body) response.status(201).json({ data: await briefs.generate(params.customerId, body.date) });
+  }));
+  router.get('/customers/:customerId/newsletter-preference', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    if (params && request.authUser) response.json({ data: await briefs.getPreference(params.customerId, request.authUser.id) });
+  }));
+  router.put('/customers/:customerId/newsletter-preference', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    const body = parse<NewsletterPreferenceInput>(newsletterPreferenceSchema, request.body, response);
+    if (params && body && request.authUser) response.json({ data: await briefs.updatePreference(params.customerId, request.authUser.id, body) });
   }));
 
   router.post('/admin/news-radar/articles/:articleId/process', requireRole('ADMIN'), asyncHandler(async (request, response) => {

@@ -1,6 +1,6 @@
 import { Router, type NextFunction, type Request, type Response, type Router as ExpressRouter } from 'express';
 import {
-  customerParamsSchema, entityIdParamsSchema, factoryCreateSchema, factoryUpdateSchema,
+  customerParamsSchema, customerPortCreateSchema, entityIdParamsSchema, factoryCreateSchema, factoryUpdateSchema,
   materialCreateSchema, materialUpdateSchema, paginationSchema, portCreateSchema, portUpdateSchema,
   productCreateSchema, productUpdateSchema, relationshipSchema, routeCreateSchema, routePortReorderSchema,
   routePortSchema, routeUpdateSchema, supplierCreateSchema, supplierUpdateSchema,
@@ -29,6 +29,7 @@ export function createSupplyChainRouter(resolveUser: ResolveUser, service: Suppl
   router.use('/customers/:customerId', requireCustomerAccess);
   router.get('/customers/:customerId/supply-chain', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string }>(customerParamsSchema, req.params, res); if (params) res.json({ data: await service.graph(params.customerId) }); }));
   router.get('/customers/:customerId/ports', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string }>(customerParamsSchema, req.params, res); const query = parsed<Filters>(paginationSchema, req.query, res); if (params && query) res.json({ data: await service.listPorts(query, params.customerId) }); }));
+  router.post('/customers/:customerId/ports', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string }>(customerParamsSchema, req.params, res); const body = parsed<PortInput & { routeId: string; sequence: number }>(customerPortCreateSchema, req.body, res); if (params && body) res.status(201).json({ data: await service.createCustomerPort(params.customerId, body) }); }));
 
   const entities = [
     ['suppliers', supplierCreateSchema, supplierUpdateSchema, service.listSuppliers.bind(service), service.getSupplier.bind(service), service.createSupplier.bind(service), service.updateSupplier.bind(service), service.archiveSupplier.bind(service)],

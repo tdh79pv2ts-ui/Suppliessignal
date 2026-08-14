@@ -57,6 +57,11 @@ describe('supply-chain API routes', () => {
     expect((await request(testApp(member)).post('/api/ports').send(body)).status).toBe(403);
     expect((await request(testApp(admin)).post('/api/ports').send(body)).status).toBe(201);
   });
+  it('allows a customer to create a port only with an explicit owned route link', async () => {
+    const body = { name: 'Customer Port', country: 'Thailand', routeId: entityId, sequence: 1 };
+    expect((await request(testApp(member)).post(`/api/customers/${customerId}/ports`).send(body)).status).toBe(201);
+    expect((await request(testApp(member)).post(`/api/customers/${otherCustomerId}/ports`).send(body)).status).toBe(403);
+  });
   it('rejects invalid UUIDs and request bodies', async () => {
     expect((await request(testApp(member)).get(`/api/customers/${customerId}/suppliers/not-a-uuid`)).status).toBe(400);
     expect((await request(testApp(member)).post(`/api/customers/${customerId}/suppliers`).send({ name: 'Missing fields' })).status).toBe(400);

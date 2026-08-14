@@ -79,4 +79,9 @@ await withDisposablePostgres(async ({ env }) => {
   await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,500);eventWorker.once('exit',(code)=>{clearTimeout(timer);reject(new Error(`Event worker exited early with code ${code}`));});});
   eventWorker.kill('SIGTERM'); await new Promise((resolve)=>eventWorker.once('exit',resolve));
   console.log('Event worker startup verified (processing disabled)');
+  const radarWorker = spawn(process.execPath, ['apps/api/dist/apps/api/src/news-radar-worker.js'], { env: { ...apiEnv, NEWS_RADAR_ENABLED: 'true', NEWS_RADAR_POLL_MS: '60000' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  radarWorker.stdout.pipe(process.stdout); radarWorker.stderr.pipe(process.stderr);
+  await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,500);radarWorker.once('exit',(code)=>{clearTimeout(timer);reject(new Error(`News radar worker exited early with code ${code}`));});});
+  radarWorker.kill('SIGTERM'); await new Promise((resolve)=>radarWorker.once('exit',resolve));
+  console.log('News radar and daily brief worker startup verified');
 });

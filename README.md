@@ -1,6 +1,6 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence platform. The repository implements the foundation, customer supply-chain graph, global source intelligence, a direct deterministic news-radar POC, schema-validated claim extraction, the Phase 4.5 validation POC, deterministic event intelligence, and deterministic customer exposure matching. Risk scoring, alerts, Daily Briefs, and notifications remain explicitly unimplemented.
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence POC. Its active product loop combines an explicit customer supply-chain graph, RSS/Atom monitoring, deterministic article-to-asset matching, explainable potential exposures and an in-app Daily Supply Chain Brief. See [the POC architecture, scope and limitations](docs/supply-chain-intelligence-poc.md).
 
 ## Architecture
 
@@ -73,6 +73,8 @@ Use a managed PostgreSQL database, set `NODE_ENV=production` plus an explicit `A
 
 ## Phase status
 
-The news-radar POC reuses RSS/Atom evidence and matches SourceArticles directly to explicit customer graph data without Claims, Events, identity resolution, review workflows, scoring, or alerts. See [the POC design and limitations](docs/supply-chain-news-radar-poc.md).
+The active POC reuses RSS/Atom evidence and matches SourceArticles directly to explicit customer graph data without Claims, Events, identity resolution, review workflows, scoring, alerts, or automated decisions. The radar worker also generates due in-app daily briefs for explicitly enabled preferences.
 
-Phase 6 remains implemented independently: verified external identifiers and exact structured geography deterministically reconcile unresolved Events with explicit customer graph data. One exposure is stored per Customer × Event, with auditable paths and separate ambiguity review. No AI or fuzzy identity matching is used. Risk scoring, alerts, briefs, and notifications remain unimplemented.
+The seed also contains a [BSK Fashion public-data workspace](docs/bsk-fashion-poc.md) with four published facilities, public product categories, and public material names. Unknown suppliers, routes, ports, and graph relationships are intentionally left empty.
+
+Enterprise-phase tables remain in migration history to preserve data, but Claims, extraction, Events, candidate review, identity governance and enterprise exposure routes are not registered in the active POC application.

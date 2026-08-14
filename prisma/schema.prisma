@@ -447,6 +447,7 @@ model User {
   proposedEventEntityIdentifiers EventEntityIdentifier[] @relation("EventEntityIdentifierProposer")
   verifiedEventEntityIdentifiers EventEntityIdentifier[] @relation("EventEntityIdentifierVerifier")
   reviewedExposureCandidates     ExposureCandidate[]
+  newsletterPreferences          NewsletterPreference[]
   createdAt                      DateTime                @default(now()) @map("created_at")
   updatedAt                      DateTime                @updatedAt @map("updated_at")
 
@@ -469,6 +470,8 @@ model Customer {
   exposureCandidates    ExposureCandidate[]
   graphIdentities       CustomerGraphIdentity[]
   newsRadarExposures    NewsRadarExposure[]
+  newsletterPreferences NewsletterPreference[]
+  dailyBriefs           DailyBrief[]
   createdAt             DateTime                @default(now()) @map("created_at")
   updatedAt             DateTime                @updatedAt @map("updated_at")
 
@@ -481,6 +484,7 @@ model CustomerMembership {
   customerId String   @map("customer_id") @db.Uuid
   user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  newsletterPreference NewsletterPreference?
   createdAt  DateTime @default(now()) @map("created_at")
   updatedAt  DateTime @updatedAt @map("updated_at")
 
@@ -836,14 +840,70 @@ model NewsRadarExposure {
   material         Material?            @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
   route            Route?               @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
   routePort        RoutePort?           @relation(fields: [routePortRouteId, portId, customerId], references: [routeId, portId, customerId], onDelete: Restrict)
+  dailyBriefItems  DailyBriefItem[]
   createdAt        DateTime             @default(now()) @map("created_at")
   updatedAt        DateTime             @updatedAt @map("updated_at")
 
   @@unique([customerId, sourceArticleId, matchKey])
+  @@unique([id, customerId])
   @@index([customerId, createdAt])
   @@index([sourceArticleId])
   @@index([customerId, entityType])
   @@map("news_radar_exposures")
+}
+
+model NewsletterPreference {
+  id           String             @id @default(uuid()) @db.Uuid
+  userId       String             @map("user_id") @db.Uuid
+  customerId   String             @map("customer_id") @db.Uuid
+  enabled      Boolean            @default(false)
+  deliveryTime String             @default("08:00") @map("delivery_time")
+  timezone     String             @default("UTC")
+  email        String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer     Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  membership   CustomerMembership @relation(fields: [userId, customerId], references: [userId, customerId], onDelete: Cascade)
+  createdAt    DateTime           @default(now()) @map("created_at")
+  updatedAt    DateTime           @updatedAt @map("updated_at")
+
+  @@unique([userId, customerId])
+  @@index([customerId, enabled])
+  @@map("newsletter_preferences")
+}
+
+model DailyBrief {
+  id          String           @id @default(uuid()) @db.Uuid
+  customerId  String           @map("customer_id") @db.Uuid
+  briefDate   DateTime         @db.Date @map("brief_date")
+  generatedAt DateTime         @default(now()) @map("generated_at")
+  graphRevision BigInt         @map("graph_revision")
+  supplyChainSnapshot Json     @map("supply_chain_snapshot")
+  customer    Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  items       DailyBriefItem[]
+  createdAt   DateTime         @default(now()) @map("created_at")
+  updatedAt   DateTime         @updatedAt @map("updated_at")
+
+  @@unique([customerId, briefDate])
+  @@unique([id, customerId])
+  @@index([customerId, generatedAt])
+  @@map("daily_briefs")
+}
+
+model DailyBriefItem {
+  id         String            @id @default(uuid()) @db.Uuid
+  customerId String            @map("customer_id") @db.Uuid
+  briefId    String            @map("brief_id") @db.Uuid
+  exposureId String            @map("exposure_id") @db.Uuid
+  section    String
+  position   Int
+  brief      DailyBrief        @relation(fields: [briefId, customerId], references: [id, customerId], onDelete: Cascade)
+  exposure   NewsRadarExposure @relation(fields: [exposureId, customerId], references: [id, customerId], onDelete: Restrict)
+  createdAt  DateTime          @default(now()) @map("created_at")
+
+  @@unique([briefId, exposureId])
+  @@unique([briefId, position])
+  @@index([customerId, exposureId])
+  @@map("daily_brief_items")
 }
 
 model ArticleExtractionLease {

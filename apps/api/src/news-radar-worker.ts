@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { db } from '@suppliesignal/db';
 import { serverEnvSchema } from '@suppliesignal/shared';
 import { newsRadarService } from './services/news-radar.js';
+import { dailyBriefService } from './services/daily-brief.js';
 
 serverEnvSchema.parse(process.env);
 const enabled = process.env.NEWS_RADAR_ENABLED !== 'false';
@@ -15,7 +16,8 @@ async function tick() {
   running = true;
   try {
     const result = await newsRadarService.processPending(batchSize);
-    console.info(JSON.stringify({ operation: 'news_radar_worker_batch', status: 'completed', ...result }));
+    const briefs = await dailyBriefService.generateDue();
+    console.info(JSON.stringify({ operation: 'news_radar_worker_batch', status: 'completed', ...result, ...briefs }));
   } catch (error) {
     console.error(JSON.stringify({ operation: 'news_radar_worker_batch', status: 'failed', errorCode: error instanceof Error ? error.name : 'NEWS_RADAR_WORKER_FAILED' }));
   } finally {

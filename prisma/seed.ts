@@ -5,11 +5,14 @@ const prisma = new PrismaClient();
 async function main() {
   const customer = await prisma.customer.upsert({
     where: { id: '5a6ce6b4-0d65-4d16-90dc-04b751f5169b' },
-    update: {},
+    update: {
+      name: 'European Electronics Manufacturer',
+      description: 'Fictional electronics supply-chain POC used for local demonstrations.',
+    },
     create: {
       id: '5a6ce6b4-0d65-4d16-90dc-04b751f5169b',
-      name: 'Demo Apparel Group',
-      description: 'Fictional customer used for local development.',
+      name: 'European Electronics Manufacturer',
+      description: 'Fictional electronics supply-chain POC used for local demonstrations.',
       defaultAlertThreshold: 60,
     },
   });
@@ -40,24 +43,172 @@ async function main() {
     },
   });
 
+  // Public BSK Fashion POC workspace. Only data explicitly published by BSK
+  // Fashion is included; no suppliers, routes, ports, or unverified edges are
+  // inferred. Sources: bskfashion.com/facilities and bskfashion.com/products.
+  const bskCustomer = await prisma.customer.upsert({
+    where: { id: 'b5000000-0000-4000-8000-000000000001' },
+    update: {
+      name: 'BSK Fashion',
+      description:
+        'Public-data POC for BSK Fashion bag and accessories manufacturing.',
+    },
+    create: {
+      id: 'b5000000-0000-4000-8000-000000000001',
+      name: 'BSK Fashion',
+      description:
+        'Public-data POC for BSK Fashion bag and accessories manufacturing.',
+    },
+  });
+  await prisma.customerMembership.upsert({
+    where: {
+      userId_customerId: {
+        userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f',
+        customerId: bskCustomer.id,
+      },
+    },
+    update: {},
+    create: {
+      userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f',
+      customerId: bskCustomer.id,
+    },
+  });
+
+  const bskFactories = [
+    {
+      id: 'b5100000-0000-4000-8000-000000000001',
+      name: 'Guangzhou Bisakai Leather Co., Ltd',
+      country: 'China',
+      city: 'Guangzhou',
+      address: 'Shiling Town, Huadu District, Guangzhou',
+      productionType:
+        'Head office, development center and production; established 2012; BSCI and GRS listed',
+    },
+    {
+      id: 'b5100000-0000-4000-8000-000000000002',
+      name: 'Welcombine Co., Ltd',
+      country: 'Myanmar',
+      city: 'Yangon',
+      address: 'Yangon, Myanmar',
+      productionType:
+        'Bag production; established 2017; BSCI listed; handbags and backpacks publicly documented',
+    },
+    {
+      id: 'b5100000-0000-4000-8000-000000000003',
+      name: 'YLX Company Limited',
+      country: 'Myanmar',
+      city: 'Yangon',
+      address: 'Yangon, Myanmar',
+      productionType: 'Bag production; established 2018',
+    },
+    {
+      id: 'b5100000-0000-4000-8000-000000000004',
+      name: 'BSK Bangladesh',
+      country: 'Bangladesh',
+      city: 'Cumilla',
+      address: 'Cumilla EPZ, Bangladesh',
+      productionType: 'Bag production; established 2024',
+    },
+  ];
+  for (const factory of bskFactories)
+    await prisma.factory.upsert({
+      where: { id: factory.id },
+      update: {
+        customerId: bskCustomer.id,
+        name: factory.name,
+        country: factory.country,
+        city: factory.city,
+        address: factory.address,
+        productionType: factory.productionType,
+        active: true,
+      },
+      create: {
+        ...factory,
+        customerId: bskCustomer.id,
+        criticality: 'MEDIUM',
+      },
+    });
+
+  const bskProducts = [
+    ['b5200000-0000-4000-8000-000000000001', 'Handbag', 'Bags'],
+    ['b5200000-0000-4000-8000-000000000002', 'Backpack', 'Bags'],
+    ['b5200000-0000-4000-8000-000000000003', 'Travel Bag', 'Bags'],
+    ['b5200000-0000-4000-8000-000000000004', 'Crossbody Bag', 'Bags'],
+    ['b5200000-0000-4000-8000-000000000005', 'Cosmetic Bag', 'Accessories'],
+    ['b5200000-0000-4000-8000-000000000006', 'Wallet', 'Accessories'],
+  ] as const;
+  for (const [id, name, category] of bskProducts)
+    await prisma.product.upsert({
+      where: { id },
+      update: { customerId: bskCustomer.id, name, category, active: true },
+      create: {
+        id,
+        customerId: bskCustomer.id,
+        name,
+        category,
+        description: 'Product category listed in the public BSK Fashion catalog.',
+        criticality: 'MEDIUM',
+      },
+    });
+
+  const bskMaterials = [
+    ['b5300000-0000-4000-8000-000000000001', 'Faux leather'],
+    ['b5300000-0000-4000-8000-000000000002', 'Nylon'],
+    ['b5300000-0000-4000-8000-000000000003', 'Polyester'],
+    ['b5300000-0000-4000-8000-000000000004', 'PU'],
+    ['b5300000-0000-4000-8000-000000000005', 'Semi PU'],
+  ] as const;
+  for (const [id, name] of bskMaterials)
+    await prisma.material.upsert({
+      where: { id },
+      update: { customerId: bskCustomer.id, name, active: true },
+      create: {
+        id,
+        customerId: bskCustomer.id,
+        name,
+        category: 'Bag material',
+        commodity: name,
+        criticality: 'MEDIUM',
+        substitutable: false,
+      },
+    });
+
+  // Welcombine is the only facility for which the public BSK pages explicitly
+  // name product types. Do not infer equivalent edges for the other factories.
+  for (const productId of [bskProducts[0][0], bskProducts[1][0]])
+    await prisma.factoryProduct.upsert({
+      where: {
+        factoryId_productId: {
+          factoryId: bskFactories[1]!.id,
+          productId,
+        },
+      },
+      update: { customerId: bskCustomer.id },
+      create: {
+        customerId: bskCustomer.id,
+        factoryId: bskFactories[1]!.id,
+        productId,
+      },
+    });
+
   const supplierRows = [
     [
       '11111111-1111-4111-8111-111111111111',
-      'Bengal Apparel Partners',
-      'Bangladesh',
-      'Gazipur',
+      'Delta Circuit Systems',
+      'Vietnam',
+      'Hanoi',
       'TIER_1',
     ],
     [
       '22222222-2222-4222-8222-222222222222',
-      'Irrawaddy Garment Partners',
-      'Myanmar',
-      'Yangon',
+      'Formosa Microelectronics',
+      'Taiwan',
+      'Taichung',
       'TIER_1',
     ],
     [
       '33333333-3333-4333-8333-333333333333',
-      'Pearl River Accessories',
+      'Pearl River Power Components',
       'China',
       'Guangzhou',
       'TIER_2',
@@ -66,7 +217,7 @@ async function main() {
   for (const [id, name, country, city, tier] of supplierRows)
     await prisma.supplier.upsert({
       where: { id },
-      update: {},
+      update: { customerId: customer.id, name, country, city, tier, criticality: 'HIGH', supplierType: 'FICTIONAL_DEMO' },
       create: {
         id,
         customerId: customer.id,
@@ -83,26 +234,26 @@ async function main() {
     [
       '41111111-1111-4111-8111-111111111111',
       supplierRows[0][0],
-      'Gazipur Apparel Works',
-      'Bangladesh',
-      'Gazipur',
-      'Apparel assembly',
+      'Hanoi Control Systems Plant',
+      'Vietnam',
+      'Hanoi',
+      'Industrial controls assembly',
     ],
     [
       '42222222-2222-4222-8222-222222222222',
       supplierRows[1][0],
-      'Yangon Garment Works',
-      'Myanmar',
-      'Yangon',
-      'Cut and sew',
+      'Taichung Sensor Works',
+      'Taiwan',
+      'Taichung',
+      'Sensor and semiconductor assembly',
     ],
     [
       '43333333-3333-4333-8333-333333333333',
       supplierRows[2][0],
-      'Guangzhou Bag Works',
+      'Guangzhou Power Electronics Works',
       'China',
       'Guangzhou',
-      'Bag assembly',
+      'Power electronics assembly',
     ],
   ] as const;
   for (const [
@@ -115,7 +266,7 @@ async function main() {
   ] of factoryRows)
     await prisma.factory.upsert({
       where: { id },
-      update: {},
+      update: { customerId: customer.id, supplierId, name, country, city, productionType, criticality: 'HIGH', active: true },
       create: {
         id,
         customerId: customer.id,
@@ -129,38 +280,38 @@ async function main() {
     });
 
   const productRows = [
-    ['51111111-1111-4111-8111-111111111111', 'Cotton T-Shirt', 'APP-TSHIRT'],
-    ['52222222-2222-4222-8222-222222222222', 'Casual Shirt', 'APP-SHIRT'],
+    ['51111111-1111-4111-8111-111111111111', 'Industrial Control Module', 'ELEC-CONTROL'],
+    ['52222222-2222-4222-8222-222222222222', 'Smart Sensor Hub', 'ELEC-SENSOR'],
     [
       '53333333-3333-4333-8333-333333333333',
-      'Lightweight Jacket',
-      'APP-JACKET',
+      'Power Adapter',
+      'ELEC-POWER',
     ],
-    ['54444444-4444-4444-8444-444444444444', 'Casual Apparel', 'APP-CASUAL'],
-    ['55555555-5555-4555-8555-555555555555', 'Leather Handbag', 'ACC-HANDBAG'],
-    ['56666666-6666-4666-8666-666666666666', 'Travel Bag', 'ACC-TRAVEL'],
+    ['54444444-4444-4444-8444-444444444444', 'Industrial Gateway', 'ELEC-GATEWAY'],
+    ['55555555-5555-4555-8555-555555555555', 'Battery Module', 'ELEC-BATTERY'],
+    ['56666666-6666-4666-8666-666666666666', 'Connectivity Board', 'ELEC-CONNECT'],
   ] as const;
   for (const [id, name, sku] of productRows)
     await prisma.product.upsert({
       where: { id },
-      update: {},
+      update: { customerId: customer.id, name, sku, category: 'Electronics', criticality: 'HIGH', active: true },
       create: {
         id,
         customerId: customer.id,
         name,
         sku,
-        category: sku.startsWith('APP') ? 'Apparel' : 'Accessories',
+        category: 'Electronics',
         criticality: 'HIGH',
       },
     });
 
   const materialNames = [
-    'Cotton',
-    'Polyester',
-    'Leather',
-    'Nylon',
-    'Zippers',
-    'Metal Hardware',
+    'Semiconductors',
+    'Copper',
+    'Lithium',
+    'Nickel',
+    'Rare Earth Magnets',
+    'Electronic Connectors',
     'Packaging',
   ];
   const materialIds = materialNames.map(
@@ -169,12 +320,12 @@ async function main() {
   for (const [index, name] of materialNames.entries())
     await prisma.material.upsert({
       where: { id: materialIds[index]! },
-      update: {},
+      update: { customerId: customer.id, name, category: index < 4 ? 'Primary material' : 'Component', commodity: name, criticality: index === 6 ? 'MEDIUM' : 'HIGH', active: true },
       create: {
         id: materialIds[index]!,
         customerId: customer.id,
         name,
-        category: index < 4 ? 'Textile and primary material' : 'Component',
+        category: index < 4 ? 'Primary material' : 'Component',
         commodity: name,
         criticality: index === 6 ? 'MEDIUM' : 'HIGH',
         substitutable: name === 'Packaging',
@@ -184,21 +335,21 @@ async function main() {
   const ports = [
     [
       '71111111-1111-4111-8111-111111111111',
-      'Port of Chattogram',
-      'Bangladesh',
-      'Chattogram',
-      'BDCGP',
-      22.3133,
-      91.8008,
+      'Port of Hai Phong',
+      'Vietnam',
+      'Hai Phong',
+      'VNHPH',
+      20.8449,
+      106.6881,
     ],
     [
       '72222222-2222-4222-8222-222222222222',
-      'Port of Yangon',
-      'Myanmar',
-      'Yangon',
-      'MMRGN',
-      16.7667,
-      96.1667,
+      'Port of Kaohsiung',
+      'Taiwan',
+      'Kaohsiung',
+      'TWKHH',
+      22.6163,
+      120.3005,
     ],
     [
       '73333333-3333-4333-8333-333333333333',
@@ -213,30 +364,30 @@ async function main() {
   for (const [id, name, country, city, portCode, latitude, longitude] of ports)
     await prisma.port.upsert({
       where: { id },
-      update: {},
+      update: { name, country, city, portCode, latitude, longitude, active: true },
       create: { id, name, country, city, portCode, latitude, longitude },
     });
 
   const routeRows = [
     [
       '81111111-1111-4111-8111-111111111111',
-      'Bangladesh export route',
-      'Gazipur',
-      'European distribution hub',
+      'Vietnam electronics route',
+      'Hanoi',
+      'Rotterdam distribution hub',
       'MULTIMODAL',
     ],
     [
       '82222222-2222-4222-8222-222222222222',
-      'Myanmar export route',
-      'Yangon production cluster',
-      'European distribution hub',
+      'Taiwan semiconductor route',
+      'Taichung production cluster',
+      'Rotterdam distribution hub',
       'SEA',
     ],
     [
       '83333333-3333-4333-8333-333333333333',
-      'Guangzhou accessories route',
+      'Guangzhou components route',
       'Guangzhou',
-      'European distribution hub',
+      'Rotterdam distribution hub',
       'SEA',
     ],
   ] as const;
@@ -249,7 +400,7 @@ async function main() {
   ] of routeRows)
     await prisma.route.upsert({
       where: { id },
-      update: {},
+      update: { customerId: customer.id, name, originLabel, destinationLabel, transportMode, criticality: 'HIGH', active: true },
       create: {
         id,
         customerId: customer.id,
@@ -366,6 +517,137 @@ async function main() {
     });
   }
 
+  // Expand the fictional electronics POC to the requested customer-value
+  // scale. Every edge below is explicit synthetic demo master data.
+  const fixtureId = (family: string, index: number) =>
+    `${family}${String(index).padStart(8 - family.length, '0')}-0000-4000-8000-${String(index).padStart(12, '0')}`;
+  const locations = [
+    ['Vietnam', 'Hanoi'], ['China', 'Shenzhen'], ['Taiwan', 'Taichung'],
+    ['Malaysia', 'Penang'], ['Indonesia', 'Batam'], ['Chile', 'Santiago'],
+    ['USA', 'Austin'], ['Germany', 'Dresden'], ['Netherlands', 'Eindhoven'],
+  ] as const;
+  const extraSupplierNames = [
+    'Saigon Embedded Technologies', 'Shenzhen Motion Controls', 'Taipei Precision Circuits',
+    'Penang Electronics Assembly', 'Batam Cable Systems', 'Andes Copper Components',
+    'Lone Star Industrial Computing', 'Saxony Semiconductor Services', 'Brabant Sensor Technologies',
+    'Mekong Battery Systems', 'Dongguan Connector Group', 'Hsinchu Logic Devices',
+    'Kuala Lumpur Power Systems', 'Java Industrial Enclosures', 'Atacama Lithium Components',
+    'Pacific Network Hardware', 'Rhine Automation Components',
+  ];
+  const extraSuppliers = extraSupplierNames.map((name, index) => ({
+    id: fixtureId('d1', index + 1), name,
+    country: locations[index % locations.length]![0], city: locations[index % locations.length]![1],
+  }));
+  for (const supplier of extraSuppliers) await prisma.supplier.upsert({
+    where: { id: supplier.id },
+    update: { ...supplier, customerId: customer.id, tier: 'TIER_1', criticality: 'HIGH', supplierType: 'FICTIONAL_DEMO', active: true },
+    create: { ...supplier, customerId: customer.id, tier: 'TIER_1', criticality: 'HIGH', supplierType: 'FICTIONAL_DEMO' },
+  });
+  const allSuppliers = [
+    ...supplierRows.map(([id, name, country, city]) => ({ id, name, country, city })),
+    ...extraSuppliers,
+  ];
+
+  const allProductNames = [
+    ...productRows.map(([, name]) => name),
+    'Motor Controller', 'Edge Computer', 'Industrial Display', 'Power Supply Unit',
+    'Machine Vision Camera', 'Programmable Relay', 'Temperature Sensor', 'Pressure Sensor',
+    'Network Switch', 'Servo Drive', 'Charging Controller', 'Energy Meter',
+    'IoT Communication Module', 'Safety Controller', 'Operator Panel', 'Data Acquisition Unit',
+    'Variable Frequency Drive', 'Remote I/O Module', 'Industrial Router', 'DC Converter',
+    'Condition Monitoring Unit', 'Smart Circuit Breaker', 'Robotics Control Board', 'Telemetry Gateway',
+  ];
+  const allProducts = productRows.map(([id, name]) => ({ id, name }));
+  for (let index = productRows.length; index < allProductNames.length; index++) {
+    const product = { id: fixtureId('d3', index + 1), name: allProductNames[index]! };
+    allProducts.push(product);
+    await prisma.product.upsert({
+      where: { id: product.id },
+      update: { ...product, customerId: customer.id, sku: `EEM-${String(index + 1).padStart(3, '0')}`, category: 'Electronics', criticality: 'HIGH', active: true },
+      create: { ...product, customerId: customer.id, sku: `EEM-${String(index + 1).padStart(3, '0')}`, category: 'Electronics', criticality: 'HIGH' },
+    });
+  }
+
+  const extraMaterialNames = [
+    'Aluminium', 'Printed Circuit Boards', 'Silicon Wafers', 'Cobalt', 'Tin', 'Gold',
+    'Engineering Plastics', 'Ceramic Capacitors', 'Power MOSFETs', 'Memory Chips',
+    'Industrial Adhesives', 'Insulated Wire', 'Thermal Interface Material',
+  ];
+  const allMaterials = materialNames.map((name, index) => ({ id: materialIds[index]!, name }));
+  for (const [index, name] of extraMaterialNames.entries()) {
+    const material = { id: fixtureId('d4', index + 1), name };
+    allMaterials.push(material);
+    await prisma.material.upsert({
+      where: { id: material.id },
+      update: { ...material, customerId: customer.id, category: 'Electronics material', commodity: name, criticality: 'HIGH', substitutable: false, active: true },
+      create: { ...material, customerId: customer.id, category: 'Electronics material', commodity: name, criticality: 'HIGH', substitutable: false },
+    });
+  }
+
+  const allFactories = factoryRows.map(([id, supplierId, name, country, city]) => ({ id, supplierId, name, country, city }));
+  for (let index = factoryRows.length; index < 50; index++) {
+    const supplier = allSuppliers[index % allSuppliers.length]!;
+    const factory = {
+      id: fixtureId('d2', index + 1), supplierId: supplier.id,
+      name: `${supplier.city} Electronics Plant ${Math.floor(index / allSuppliers.length) + 1}`,
+      country: supplier.country, city: supplier.city,
+    };
+    allFactories.push(factory);
+    await prisma.factory.upsert({
+      where: { id: factory.id },
+      update: { ...factory, customerId: customer.id, productionType: 'Electronics manufacturing', criticality: 'HIGH', active: true },
+      create: { ...factory, customerId: customer.id, productionType: 'Electronics manufacturing', criticality: 'HIGH' },
+    });
+  }
+
+  const extraPorts = [
+    ['Port of Rotterdam', 'Netherlands', 'Rotterdam', 'NLRTM'],
+    ['Port Klang', 'Malaysia', 'Klang', 'MYPKG'],
+    ['Port of Tanjung Priok', 'Indonesia', 'Jakarta', 'IDTPP'],
+    ['Port of San Antonio', 'Chile', 'San Antonio', 'CLSAI'],
+    ['Port of Los Angeles', 'USA', 'Los Angeles', 'USLAX'],
+    ['Port of Hamburg', 'Germany', 'Hamburg', 'DEHAM'],
+    ['Port of Singapore', 'Singapore', 'Singapore', 'SGSIN'],
+  ] as const;
+  const allPorts = ports.map(([id, name, country, city, portCode]) => ({ id, name, country, city, portCode }));
+  for (const [index, [name, country, city, portCode]] of extraPorts.entries()) {
+    const port = { id: fixtureId('d5', index + 1), name, country, city, portCode };
+    allPorts.push(port);
+    await prisma.port.upsert({ where: { id: port.id }, update: { ...port, active: true }, create: port });
+  }
+
+  const allRoutes = routeRows.map(([id, name, originLabel, destinationLabel]) => ({ id, name, originLabel, destinationLabel }));
+  for (let index = routeRows.length; index < 15; index++) {
+    const supplier = allSuppliers[index % allSuppliers.length]!;
+    const route = { id: fixtureId('d6', index + 1), name: `${supplier.city} to Rotterdam route`, originLabel: supplier.city, destinationLabel: 'Rotterdam' };
+    allRoutes.push(route);
+    await prisma.route.upsert({
+      where: { id: route.id },
+      update: { ...route, customerId: customer.id, transportMode: 'MULTIMODAL', criticality: 'HIGH', active: true },
+      create: { ...route, customerId: customer.id, transportMode: 'MULTIMODAL', criticality: 'HIGH' },
+    });
+  }
+
+  // Complete a navigable Supplier → Factory → Product → Material graph and
+  // Route → Port graph without inferred real-world relationships.
+  for (const [index, factory] of allFactories.entries()) {
+    const product = allProducts[index % allProducts.length]!;
+    await prisma.factoryProduct.upsert({ where: { factoryId_productId: { factoryId: factory.id, productId: product.id } }, update: { customerId: customer.id }, create: { customerId: customer.id, factoryId: factory.id, productId: product.id } });
+    await prisma.supplierProduct.upsert({ where: { supplierId_productId: { supplierId: factory.supplierId, productId: product.id } }, update: { customerId: customer.id }, create: { customerId: customer.id, supplierId: factory.supplierId, productId: product.id } });
+  }
+  for (const [index, product] of allProducts.entries()) {
+    const material = allMaterials[index % allMaterials.length]!;
+    await prisma.productMaterial.upsert({ where: { productId_materialId: { productId: product.id, materialId: material.id } }, update: { customerId: customer.id }, create: { customerId: customer.id, productId: product.id, materialId: material.id } });
+  }
+  for (const [index, route] of allRoutes.entries()) {
+    const supplier = allSuppliers[index % allSuppliers.length]!;
+    const factory = allFactories.find((item) => item.supplierId === supplier.id) ?? allFactories[index]!;
+    const port = allPorts[index % allPorts.length]!;
+    await prisma.routeSupplier.upsert({ where: { routeId_supplierId: { routeId: route.id, supplierId: supplier.id } }, update: { customerId: customer.id }, create: { customerId: customer.id, routeId: route.id, supplierId: supplier.id } });
+    await prisma.routeFactory.upsert({ where: { routeId_factoryId: { routeId: route.id, factoryId: factory.id } }, update: { customerId: customer.id }, create: { customerId: customer.id, routeId: route.id, factoryId: factory.id } });
+    await prisma.routePort.upsert({ where: { routeId_portId: { routeId: route.id, portId: port.id } }, update: { customerId: customer.id, sequence: 1 }, create: { customerId: customer.id, routeId: route.id, portId: port.id, sequence: 1 } });
+  }
+
   const sources = [
     ['BGMEA', 'https://www.bgmea.com.bd/', 'Bangladesh', 'INDUSTRY', 'MEDIUM'],
     [
@@ -464,15 +746,15 @@ async function main() {
     {
       articleId: 'a2000000-0000-4000-8000-000000000001',
       exposureId: 'a3000000-0000-4000-8000-000000000001',
-      title: 'Fictional fire halts work at Gazipur Apparel Works',
-      text: 'A fictional fire caused a production shutdown at Gazipur Apparel Works in Gazipur, Bangladesh.',
+      title: 'Fictional fire halts work at Hanoi Control Systems Plant',
+      text: 'A fictional fire caused a production shutdown at Hanoi Control Systems Plant in Hanoi, Vietnam.',
       entityType: 'FACTORY' as const,
       topic: 'OPERATIONAL' as const,
       method: 'UNIQUE_EXACT_NAME' as const,
       matchKey: `factory:${factoryRows[0][0]}`,
       confidence: 0.92,
       reason: 'Factory name occurs exactly in disruptive coverage.',
-      matchedTerms: ['Gazipur Apparel Works'],
+      matchedTerms: ['Hanoi Control Systems Plant'],
       factoryId: factoryRows[0][0],
       path: [
         { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
@@ -483,15 +765,15 @@ async function main() {
     {
       articleId: 'a2000000-0000-4000-8000-000000000002',
       exposureId: 'a3000000-0000-4000-8000-000000000002',
-      title: 'Fictional Port of Chattogram closure delays shipping',
-      text: 'A fictional port closure at the Port of Chattogram caused shipping delays.',
+      title: 'Fictional Port of Hai Phong closure delays shipping',
+      text: 'A fictional port closure at the Port of Hai Phong caused shipping delays.',
       entityType: 'PORT' as const,
       topic: 'LOGISTICS' as const,
       method: 'EXACT_PORT_NAME' as const,
       matchKey: `port:${routeRows[0][0]}:${ports[0][0]}`,
       confidence: 0.93,
       reason: 'A named port is explicitly present on this customer route.',
-      matchedTerms: ['Port of Chattogram'],
+      matchedTerms: ['Port of Hai Phong'],
       routePortRouteId: routeRows[0][0],
       portId: ports[0][0],
       path: [
@@ -503,15 +785,15 @@ async function main() {
     {
       articleId: 'a2000000-0000-4000-8000-000000000003',
       exposureId: 'a3000000-0000-4000-8000-000000000003',
-      title: 'Fictional export restriction affects Bengal Apparel Partners in Bangladesh',
-      text: 'A fictional export restriction affects Bengal Apparel Partners in Bangladesh.',
+      title: 'Fictional export restriction affects Delta Circuit Systems in Vietnam',
+      text: 'A fictional export restriction affects Delta Circuit Systems in Vietnam.',
       entityType: 'SUPPLIER' as const,
       topic: 'TRADE' as const,
       method: 'NAME_AND_LOCATION' as const,
       matchKey: `supplier:${supplierRows[0][0]}`,
       confidence: 0.9,
       reason: 'Supplier name and location occur exactly in disruptive coverage.',
-      matchedTerms: ['Bengal Apparel Partners', 'Bangladesh'],
+      matchedTerms: ['Delta Circuit Systems', 'Vietnam'],
       supplierId: supplierRows[0][0],
       path: [
         { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
@@ -521,15 +803,15 @@ async function main() {
     {
       articleId: 'a2000000-0000-4000-8000-000000000004',
       exposureId: 'a3000000-0000-4000-8000-000000000004',
-      title: 'Fictional cotton shortage disrupts apparel production',
-      text: 'A fictional cotton shortage disrupts apparel production across the region.',
+      title: 'Fictional semiconductor shortage disrupts control module production',
+      text: 'A fictional semiconductor shortage disrupts Industrial Control Module production across the region.',
       entityType: 'MATERIAL' as const,
       topic: 'OPERATIONAL' as const,
       method: 'UNIQUE_EXACT_NAME' as const,
       matchKey: `material:${materialIds[0]}`,
       confidence: 0.84,
       reason: 'Material or commodity name occurs exactly in disruptive coverage.',
-      matchedTerms: ['Cotton'],
+      matchedTerms: ['Semiconductors'],
       materialId: materialIds[0],
       path: [
         { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
@@ -566,7 +848,7 @@ async function main() {
         completedAt: new Date('2026-08-13T00:00:00Z'),
         topics: [fixture.topic],
         detectedTerms: fixture.matchedTerms,
-        detectedLocations: fixture.matchedTerms.filter((value) => ['Bangladesh', 'Gazipur', 'Port of Chattogram'].includes(value)),
+        detectedLocations: fixture.matchedTerms.filter((value) => ['Vietnam', 'Hanoi', 'Port of Hai Phong'].includes(value)),
       },
     });
     await prisma.newsRadarExposure.upsert({
@@ -592,6 +874,92 @@ async function main() {
       },
     });
   }
+
+  for (let index = 5; index <= 100; index++) {
+    const articleId = `a2000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+    const exposureId = `a3000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
+    const kind = index % 6;
+    const supplier = allSuppliers[index % allSuppliers.length]!;
+    const factory = allFactories[index % allFactories.length]!;
+    const product = allProducts[index % allProducts.length]!;
+    const material = allMaterials[index % allMaterials.length]!;
+    const route = allRoutes[index % allRoutes.length]!;
+    const publishedAt = new Date(Date.UTC(2026, 7, 13, index % 24, index % 60));
+    const base = {
+      title: '', text: '', entityType: 'SUPPLIER' as 'SUPPLIER' | 'FACTORY' | 'PRODUCT' | 'MATERIAL' | 'ROUTE' | 'PORT',
+      topic: 'OPERATIONAL' as 'OPERATIONAL' | 'LOGISTICS' | 'TRADE' | 'ECONOMIC',
+      method: 'UNIQUE_EXACT_NAME' as 'UNIQUE_EXACT_NAME' | 'NAME_AND_LOCATION' | 'EXACT_PORT_NAME',
+      matchKey: '', confidence: 0.84, reason: '', matchedTerms: [] as string[], path: [] as Array<{ nodeType: string; id: string; label: string; relationship?: string }>,
+      supplierId: undefined as string | undefined, factoryId: undefined as string | undefined,
+      productId: undefined as string | undefined, materialId: undefined as string | undefined,
+      routeId: undefined as string | undefined, routePortRouteId: undefined as string | undefined,
+      portId: undefined as string | undefined,
+    };
+    const customerPath = { nodeType: 'CUSTOMER', id: customer.id, label: customer.name };
+    if (kind === 0) Object.assign(base, {
+      title: `Fictional export restriction affects ${supplier.name} in ${supplier.country}`,
+      text: `A fictional export restriction affects ${supplier.name} operations in ${supplier.city}, ${supplier.country}.`,
+      entityType: 'SUPPLIER', topic: 'TRADE', method: 'NAME_AND_LOCATION', matchKey: `supplier:${supplier.id}`, confidence: 0.9,
+      reason: 'Supplier name and location occur exactly in disruptive coverage.', matchedTerms: [supplier.name, supplier.country], supplierId: supplier.id,
+      path: [customerPath, { nodeType: 'SUPPLIER', id: supplier.id, label: supplier.name, relationship: 'explicit synthetic demo supplier' }],
+    });
+    if (kind === 1) Object.assign(base, {
+      title: `Fictional fire disrupts ${factory.name}`,
+      text: `A fictional fire caused a production shutdown at ${factory.name} in ${factory.city}, ${factory.country}.`,
+      entityType: 'FACTORY', matchKey: `factory:${factory.id}`, confidence: 0.92,
+      reason: 'Factory name occurs exactly in disruptive coverage.', matchedTerms: [factory.name], factoryId: factory.id,
+      path: [customerPath, { nodeType: 'SUPPLIER', id: factory.supplierId, label: allSuppliers.find((item) => item.id === factory.supplierId)?.name ?? 'Supplier', relationship: 'explicit synthetic demo supplier' }, { nodeType: 'FACTORY', id: factory.id, label: factory.name, relationship: 'explicit synthetic demo factory' }],
+    });
+    if (kind === 2) Object.assign(base, {
+      title: `Fictional component shortage disrupts ${product.name} production`,
+      text: `A fictional component shortage disrupts production of the ${product.name}.`,
+      entityType: 'PRODUCT', matchKey: `product:${product.id}`, confidence: 0.82,
+      reason: 'Product name occurs exactly in disruptive coverage.', matchedTerms: [product.name], productId: product.id,
+      path: [customerPath, { nodeType: 'PRODUCT', id: product.id, label: product.name, relationship: 'explicit synthetic demo product' }],
+    });
+    if (kind === 3) Object.assign(base, {
+      title: `Fictional ${material.name} shortage affects electronics manufacturing`,
+      text: `A fictional ${material.name} shortage disrupts electronics production.`,
+      entityType: 'MATERIAL', topic: 'ECONOMIC', matchKey: `material:${material.id}`, confidence: 0.84,
+      reason: 'Material name occurs exactly in disruptive coverage.', matchedTerms: [material.name], materialId: material.id,
+      path: [customerPath, { nodeType: 'PRODUCT', id: product.id, label: product.name, relationship: 'explicit synthetic demo product' }, { nodeType: 'MATERIAL', id: material.id, label: material.name, relationship: 'explicit synthetic demo material' }],
+    });
+    if (kind === 4) Object.assign(base, {
+      title: `Fictional shipping disruption on ${route.name}`,
+      text: `A fictional route disruption caused shipping delays on the ${route.name}.`,
+      entityType: 'ROUTE', topic: 'LOGISTICS', matchKey: `route:${route.id}`, confidence: 0.9,
+      reason: 'Route name occurs exactly in disruptive coverage.', matchedTerms: [route.name], routeId: route.id,
+      path: [customerPath, { nodeType: 'ROUTE', id: route.id, label: route.name, relationship: 'explicit synthetic demo route' }],
+    });
+    if (kind === 5) {
+      const routeIndex = index % allRoutes.length;
+      const routeForPort = allRoutes[routeIndex]!;
+      const routePort = allPorts[routeIndex % allPorts.length]!;
+      Object.assign(base, {
+        title: `Fictional port closure at ${routePort.name}`,
+        text: `A fictional port closure at ${routePort.name} caused shipping delays.`,
+        entityType: 'PORT', topic: 'LOGISTICS', method: 'EXACT_PORT_NAME', matchKey: `port:${routeForPort.id}:${routePort.id}`, confidence: 0.93,
+        reason: 'A named port is explicitly present on this synthetic customer route.', matchedTerms: [routePort.name], routePortRouteId: routeForPort.id, portId: routePort.id,
+        path: [customerPath, { nodeType: 'ROUTE', id: routeForPort.id, label: routeForPort.name, relationship: 'explicit synthetic demo route' }, { nodeType: 'PORT', id: routePort.id, label: routePort.name, relationship: 'explicit route port' }],
+      });
+    }
+    await prisma.sourceArticle.upsert({ where: { id: articleId }, update: { title: base.title, excerpt: base.text, normalizedText: base.text, publishedAt }, create: { id: articleId, sourceId: radarSourceId, originalUrl: `https://news-radar-fixture.invalid/articles/${articleId}`, title: base.title, excerpt: base.text, normalizedText: base.text, publishedAt, contentHash: `news-radar-content-${articleId}`, urlHash: `news-radar-url-${articleId}`, status: 'NORMALIZED' } });
+    await prisma.newsRadarArticleProcessing.upsert({ where: { sourceArticleId: articleId }, update: { status: 'COMPLETED', topics: [base.topic], detectedTerms: base.matchedTerms, completedAt: publishedAt }, create: { sourceArticleId: articleId, status: 'COMPLETED', ownerToken: 'a4000000-0000-4000-8000-000000000001', leaseExpiresAt: publishedAt, completedAt: publishedAt, topics: [base.topic], detectedTerms: base.matchedTerms, detectedLocations: base.entityType === 'PORT' ? base.matchedTerms : [] } });
+    await prisma.newsRadarExposure.upsert({ where: { customerId_sourceArticleId_matchKey: { customerId: customer.id, sourceArticleId: articleId, matchKey: base.matchKey } }, update: { topic: base.topic, reason: base.reason, pathSnapshot: base.path }, create: { id: exposureId, customerId: customer.id, sourceArticleId: articleId, matchKey: base.matchKey, entityType: base.entityType, topic: base.topic, matchMethod: base.method, confidence: base.confidence, reason: base.reason, matchedTerms: base.matchedTerms, pathSnapshot: base.path, supplierId: base.supplierId, factoryId: base.factoryId, productId: base.productId, materialId: base.materialId, routeId: base.routeId, routePortRouteId: base.routePortRouteId, portId: base.portId } });
+  }
+
+  await prisma.newsletterPreference.upsert({
+    where: { userId_customerId: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id } },
+    update: {},
+    create: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id, enabled: false, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'customer@demo.suppliesignal.local' },
+  });
+  const demoBrief = await prisma.dailyBrief.upsert({
+    where: { customerId_briefDate: { customerId: customer.id, briefDate: new Date('2026-08-14T00:00:00Z') } },
+    update: { graphRevision: 0, supplyChainSnapshot: { suppliers: 20, factories: 50, products: 30, materials: 20, routes: 15, ports: 10 } },
+    create: { customerId: customer.id, briefDate: new Date('2026-08-14T00:00:00Z'), graphRevision: 0, supplyChainSnapshot: { suppliers: 20, factories: 50, products: 30, materials: 20, routes: 15, ports: 10 } },
+  });
+  await prisma.dailyBriefItem.deleteMany({ where: { briefId: demoBrief.id } });
+  await prisma.dailyBriefItem.createMany({ data: Array.from({ length: 20 }, (_, offset) => ({ customerId: customer.id, briefId: demoBrief.id, exposureId: `a3000000-0000-4000-8000-${String(100 - offset).padStart(12, '0')}`, section: offset < 5 ? 'TOP_DEVELOPMENTS' : offset < 15 ? 'POTENTIAL_EXPOSURES' : 'WATCHLIST', position: offset + 1 })) });
 
   const eventFixtureSourceId = '91000000-0000-4000-8000-000000000001';
   await prisma.source.upsert({

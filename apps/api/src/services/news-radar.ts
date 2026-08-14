@@ -61,7 +61,7 @@ export class NewsRadarService {
   }
 
   async dashboard(customerId: string) {
-    const [graph, exposures, exposureCount, articlesToday, latestRun] = await Promise.all([
+    const [graph, exposures, exposureCount, articlesToday, latestRun, latestBrief] = await Promise.all([
       this.graph(customerId),
       db.newsRadarExposure.findMany({ where: { customerId }, include: exposureInclude, orderBy: { createdAt: 'desc' }, take: 10 }),
       db.newsRadarExposure.count({ where: { customerId } }),
@@ -70,8 +70,14 @@ export class NewsRadarService {
         distinct: ['sourceArticleId'], select: { sourceArticleId: true },
       }),
       db.sourceCollectionRun.findFirst({ orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
+      db.dailyBrief.findFirst({
+        where: { customerId },
+        orderBy: [{ briefDate: 'desc' }, { generatedAt: 'desc' }],
+        include: { items: { orderBy: { position: 'asc' }, take: 3, include: { exposure: { include: { sourceArticle: { include: { source: true } } } } } } },
+      }),
     ]);
     return {
+      customer: graph.customer,
       counts: {
         suppliers: graph.suppliers.length,
         factories: graph.factories.length,
@@ -83,6 +89,7 @@ export class NewsRadarService {
         potentialExposures: exposureCount,
       },
       latestCollection: latestRun,
+      latestBrief: latestBrief ? { ...latestBrief, graphRevision: latestBrief.graphRevision.toString() } : null,
       exposures,
     };
   }

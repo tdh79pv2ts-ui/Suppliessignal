@@ -27,11 +27,13 @@ type RadarExposure = {
 };
 
 type Dashboard = {
+  customer: { id: string; name: string };
   counts: {
     suppliers: number; factories: number; countries: number; products: number;
     materials: number; routes: number; relevantArticlesToday: number; potentialExposures: number;
   };
   latestCollection?: { status: string; startedAt: string; completedAt?: string | null; itemsCreated: number; itemsFailed: number; source: { name: string } } | null;
+  latestBrief?: { briefDate: string; items: Array<{ exposure: { id: string; sourceArticle: { title: string } } }> } | null;
   exposures: RadarExposure[];
 };
 
@@ -58,7 +60,7 @@ export function NewsRadarDashboard() {
   ] as const : [];
   return <div className="p-5 sm:p-8">
     <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-      <div><p className="text-sm font-medium text-signal">News intelligence radar</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">Supply-chain exposure overview</h1><p className="mt-2 max-w-3xl text-sm text-muted">Continuously collected RSS and Atom coverage matched deterministically against explicit customer assets. Results are potential relevance signals, not risk scores or decisions.</p></div>
+      <div><p className="text-sm font-medium text-signal">News intelligence radar</p><h1 className="mt-1 text-2xl font-semibold tracking-tight">{data ? `${data.customer.name} supply-chain radar` : 'Supply-chain exposure overview'}</h1><p className="mt-2 max-w-3xl text-sm text-muted">Continuously collected RSS and Atom coverage matched deterministically against explicit customer assets. Results are potential relevance signals, not risk scores or decisions.</p></div>
       <div className="flex items-center gap-2 text-xs text-muted"><RadioTower className="h-4 w-4" /> Default source interval: 15 minutes</div>
     </div>
     {error && <div className="mt-6"><ErrorMessage text={error} /></div>}
@@ -71,6 +73,7 @@ export function NewsRadarDashboard() {
         <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold">Monitoring status</h2><p className="mt-1 text-xs text-muted">Source run state is stored in PostgreSQL.</p></div>{data.latestCollection ? <span className="rounded-full border px-3 py-1 text-xs">{data.latestCollection.status}</span> : null}</div>
         {data.latestCollection ? <p className="mt-3 text-sm">{data.latestCollection.source.name} · {new Date(data.latestCollection.startedAt).toLocaleString()} · {data.latestCollection.itemsCreated} new / {data.latestCollection.itemsFailed} failed</p> : <p className="mt-3 text-sm text-muted">No collection run has been recorded. An administrator must enable at least one verified RSS or Atom source.</p>}
       </section>
+      <section className="mt-8 rounded-xl border bg-white p-5"><div className="flex items-center justify-between gap-3"><div><h2 className="font-semibold">Daily brief</h2><p className="mt-1 text-xs text-muted">A concise evidence-linked view of overnight developments.</p></div><Link className="text-sm font-semibold text-signal hover:underline" to="/daily-brief">Open brief</Link></div>{data.latestBrief ? <div className="mt-4"><p className="text-xs text-muted">{new Date(data.latestBrief.briefDate).toLocaleDateString()}</p><ul className="mt-2 space-y-1 text-sm">{data.latestBrief.items.map((item) => <li key={item.exposure.id}>• {item.exposure.sourceArticle.title}</li>)}</ul></div> : <p className="mt-3 text-sm text-muted">No brief generated yet. Open Daily brief to generate the first preview.</p>}</section>
       <div className="mt-8 flex items-end justify-between"><div><h2 className="font-semibold">Latest potential exposures</h2><p className="mt-1 text-xs text-muted">Every result links to its original article and an explicit supply-chain path.</p></div></div>
       {data.exposures.length === 0 ? <div className="mt-4 rounded-xl border bg-white p-6"><h3 className="font-medium">No relevant coverage matched yet</h3><p className="mt-2 text-sm text-muted">Add explicit customer assets and enable verified RSS/Atom sources. Name-only ambiguous suppliers are intentionally not matched.</p></div> : <div className="mt-4 space-y-3">{data.exposures.map((exposure) => <article key={exposure.id} className="rounded-xl border bg-white p-5"><div className="flex flex-wrap gap-2 text-[11px] font-medium uppercase tracking-wide text-muted"><span>{exposure.topic}</span><span>·</span><span>{exposure.entityType}</span><span>·</span><span>match {exposure.confidence}</span></div><Link className="mt-2 block font-semibold text-signal hover:underline" to={`/news-radar/exposures/${exposure.id}`}>{exposure.sourceArticle.title}</Link><p className="mt-2 text-sm">{exposure.reason}</p><p className="mt-2 text-xs text-muted">{exposure.sourceArticle.source.name} · {exposure.pathSnapshot.map((step) => step.label).join(' → ')}</p></article>)}</div>}
     </>}

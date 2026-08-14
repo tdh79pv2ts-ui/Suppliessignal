@@ -6,7 +6,6 @@ import { AppShell } from './components/AppShell';
 import { supabase } from './lib/auth';
 import { DashboardPage } from './pages/DashboardPage';
 import { LoginPage } from './pages/LoginPage';
-import { PlaceholderPage } from './pages/PlaceholderPage';
 import {
   EntityDetailPage,
   EntityListPage,
@@ -22,11 +21,8 @@ import {
   SourceDetailPage,
   SourcesPage,
 } from './pages/SourcePages';
-import { ClaimDetailPage, ClaimsPage } from './pages/ClaimsPages';
-import { PocDatasetPage, PocDatasetsPage, PocResultsPage } from './pages/PocExtractionPages';
-import { EventDetailPage, EventsPage } from './pages/EventPages';
-import { ExposureCandidatesPage, ExposureDetailPage, ExposuresPage, IdentityReviewPage } from './pages/ExposurePages';
 import { NewsRadarDashboard, NewsRadarExposureDetailPage } from './pages/NewsRadarPages';
+import { DailyBriefPage, NewsletterSettingsPage } from './pages/DailyBriefPage';
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -119,6 +115,7 @@ export function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/news-radar" element={<NewsRadarDashboard />} />
         <Route path="/news-radar/exposures/:id" element={<NewsRadarExposureDetailPage />} />
+        <Route path="/daily-brief" element={<DailyBriefPage />} />
         <Route path="/supply-chain" element={<SupplyChainOverview />} />
         {entityKinds.flatMap((kind) => [
           <Route
@@ -173,25 +170,7 @@ export function App() {
             )
           }
         />
-        <Route path="/claims" element={globalIntelligenceAllowed ? <ClaimsPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/claims/:id" element={globalIntelligenceAllowed ? <ClaimDetailPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/poc/extraction" element={globalIntelligenceAllowed ? <PocDatasetsPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/poc/extraction/:datasetId" element={globalIntelligenceAllowed ? <PocDatasetPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/poc/extraction/:datasetId/results" element={globalIntelligenceAllowed ? <PocResultsPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/events" element={globalIntelligenceAllowed ? <EventsPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/events/:eventId" element={globalIntelligenceAllowed ? <EventDetailPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/exposures" element={<ExposuresPage />} />
-        <Route path="/exposures/:id" element={<ExposureDetailPage />} />
-        <Route path="/exposure-candidates" element={globalIntelligenceAllowed ? <ExposureCandidatesPage /> : <Navigate to="/dashboard" replace />} />
-        <Route path="/identity-review" element={globalIntelligenceAllowed ? <IdentityReviewPage /> : <Navigate to="/dashboard" replace />} />
-        <Route
-          path="/review"
-          element={<PlaceholderPage title="Review queue" phase={8} />}
-        />
-        <Route
-          path="/settings"
-          element={<PlaceholderPage title="Customer settings" phase={9} />}
-        />
+        <Route path="/settings" element={<NewsletterSettingsPage />} />
       </Route>
       <Route
         path="*"

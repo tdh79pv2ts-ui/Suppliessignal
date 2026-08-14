@@ -33,7 +33,7 @@ type Field = {
   key: string;
   label: string;
   required?: boolean;
-  kind?: 'select' | 'supplier' | 'boolean' | 'number';
+  kind?: 'select' | 'supplier' | 'route' | 'boolean' | 'number';
   options?: string[];
 };
 const criticalities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
@@ -600,8 +600,9 @@ export function EntityDetailPage({ kind }: { kind: EntityKind }) {
 }
 
 export function PortsPage() {
-  const { user } = useWorkspace();
+  const { user, customerId } = useWorkspace();
   const [items, setItems] = useState<Row[]>([]);
+  const [routes, setRoutes] = useState<Row[]>([]);
   const [editing, setEditing] = useState<Row | null>(null);
   const [error, setError] = useState<string | null>(null);
   const fields: Field[] = [
@@ -612,20 +613,25 @@ export function PortsPage() {
     { key: 'latitude', label: 'Latitude', kind: 'number' },
     { key: 'longitude', label: 'Longitude', kind: 'number' },
   ];
+  const createFields: Field[] = [...fields, { key: 'routeId', label: 'Customer route', kind: 'route', required: true }, { key: 'sequence', label: 'Route sequence', kind: 'number', required: true }];
   const load = () =>
-    void apiRequest<{ items: Row[] }>('/ports?active=all&pageSize=100')
-      .then((data) => {
+    void Promise.all([
+      apiRequest<{ items: Row[] }>(`/customers/${customerId}/ports?active=all&pageSize=100`),
+      apiRequest<{ items: Row[] }>(`/customers/${customerId}/routes?active=true&pageSize=100`),
+    ])
+      .then(([data, routeData]) => {
         setItems(data.items);
+        setRoutes(routeData.items);
         setError(null);
       })
       .catch((reason: unknown) => setError(errorText(reason)));
-  useEffect(load, []);
+  useEffect(load, [customerId]);
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     try {
-      await apiRequest(editing ? `/ports/${editing.id}` : '/ports', {
+      await apiRequest(editing ? `/ports/${editing.id}` : `/customers/${customerId}/ports`, {
         method: editing ? 'PATCH' : 'POST',
-        body: JSON.stringify(payloadFromForm(event.currentTarget, fields)),
+        body: JSON.stringify(payloadFromForm(event.currentTarget, editing ? fields : createFields)),
       });
       event.currentTarget.reset();
       setEditing(null);
@@ -646,13 +652,14 @@ export function PortsPage() {
   return (
     <Page
       title="Ports"
-      subtitle="Global reference entities. Only administrators can mutate port data."
+      subtitle="Route-linked port references. New ports are created with an explicit customer route relationship."
     >
       {error && <ErrorBox text={error} />}
-      {user.role === 'ADMIN' && (
+      {routes.length > 0 && (
         <EntityForm
           key={editing?.id ?? 'new'}
-          fields={fields}
+          fields={editing ? fields : createFields}
+          routeOptions={routes}
           {...(editing ? { initial: editing } : {})}
           onSubmit={save}
           submitLabel={editing ? 'Save port' : 'Create port'}
@@ -1013,12 +1020,14 @@ function EntityForm({
   fields,
   initial,
   supplierOptions = [],
+  routeOptions = [],
   onSubmit,
   submitLabel,
 }: {
   fields: Field[];
   initial?: Row;
   supplierOptions?: Row[];
+  routeOptions?: Row[];
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   submitLabel: string;
 }) {
@@ -1028,17 +1037,17 @@ function EntityForm({
         {fields.map((field) => (
           <label className="text-sm font-medium" key={field.key}>
             {field.label}
-            {field.kind === 'supplier' ? (
+            {field.kind === 'supplier' || field.kind === 'route' ? (
               <select
                 name={field.key}
                 defaultValue={String(initial?.[field.key] ?? '')}
                 required={field.required}
                 className="focus-ring mt-2 w-full rounded-lg border px-3 py-2.5 font-normal"
               >
-                <option value="">No supplier</option>
-                {supplierOptions.map((supplier) => (
-                  <option value={supplier.id} key={supplier.id}>
-                    {supplier.name}
+                <option value="">{field.kind === 'supplier' ? 'No supplier' : 'Select route'}</option>
+                {(field.kind === 'supplier' ? supplierOptions : routeOptions).map((option) => (
+                  <option value={option.id} key={option.id}>
+                    {option.name}
                   </option>
                 ))}
               </select>

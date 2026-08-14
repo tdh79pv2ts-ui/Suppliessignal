@@ -73,6 +73,10 @@ export const portCreateSchema = z.object({
   active,
 });
 export const portUpdateSchema = portCreateSchema.partial().refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+export const customerPortCreateSchema = portCreateSchema.extend({
+  routeId: z.string().uuid(),
+  sequence: z.number().int().min(1),
+});
 
 export const paginationSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

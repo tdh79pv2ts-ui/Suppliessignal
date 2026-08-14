@@ -57,6 +57,20 @@ export class SupplyChainService {
 
   async listPorts(f: Filters, customerId?: string, accessibleCustomerIds?: string[], isAdmin = false) { const onlyActive = activeFilter(f.active); const where: Prisma.PortWhereInput = { ...(typeof onlyActive === 'boolean' ? { active: onlyActive } : {}), ...(f.country ? { country: f.country } : {}), ...(f.search ? { name: { contains: f.search, mode: 'insensitive' as const } } : {}), ...(customerId ? { routePorts: { some: { customerId } } } : {}) }; const routeScope = customerId ? { customerId } : isAdmin ? {} : { customerId: { in: accessibleCustomerIds ?? [] } }; const args = { where, orderBy: { name: 'asc' as const }, skip: (f.page - 1) * f.pageSize, take: f.pageSize, include: { routePorts: { where: routeScope, include: { route: true }, orderBy: { sequence: 'asc' as const } } } }; const [items, total] = await db.$transaction([db.port.findMany(args), db.port.count({ where })]); return { items, pagination: pagination(f.page, f.pageSize, total) }; }
   createPort(data: PortInput) { return db.port.create({ data: coordinates(data) as unknown as Prisma.PortUncheckedCreateInput }); }
+  async createCustomerPort(customerId: string, data: PortInput & { routeId: string; sequence: number }) {
+    await this.requireOwned('route', customerId, data.routeId);
+    const { routeId, sequence, ...portData } = data;
+    try {
+      return await db.$transaction(async (tx) => {
+        const port = await tx.port.create({ data: coordinates(portData) as unknown as Prisma.PortUncheckedCreateInput });
+        await tx.routePort.create({ data: { customerId, routeId, portId: port.id, sequence } });
+        return port;
+      });
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ServiceError('PORT_OR_SEQUENCE_ALREADY_EXISTS', 'Port code or route sequence is already used', 409);
+      throw error;
+    }
+  }
   async getPort(id: string, customerIds: string[], isAdmin: boolean) { const port = await db.port.findUnique({ where: { id }, include: { routePorts: { ...(isAdmin ? {} : { where: { customerId: { in: customerIds } } }), include: { route: true }, orderBy: { sequence: 'asc' } } } }); if (!port) throw new ServiceError('PORT_NOT_FOUND', 'Port not found', 404); return port; }
   async updatePort(id: string, data: Update) { const port = await db.port.findUnique({ where: { id } }); if (!port) throw new ServiceError('PORT_NOT_FOUND', 'Port not found', 404); return db.port.update({ where: { id }, data: coordinates(data) as Prisma.PortUncheckedUpdateInput }); }
   archivePort(id: string) { return this.updatePort(id, { active: false }); }

@@ -10,10 +10,6 @@ import { assertCustomerAccess, createUserResolver, requireAuth, type ResolveUser
 import { createLogger } from './logger.js';
 import { createSupplyChainRouter, supplyChainErrorHandler } from './routes/supply-chain.js';
 import { createSourceIntelligenceRouter } from './routes/source-intelligence.js';
-import { createExtractionRouter } from './routes/extraction.js';
-import { createPocEvaluationRouter } from './routes/poc-evaluation.js';
-import { createEventRouter } from './routes/events.js';
-import { createCustomerExposureRouter } from './routes/customer-exposure.js';
 import { createNewsRadarRouter } from './routes/news-radar.js';
 
 type AppOptions = {
@@ -75,18 +71,14 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
     response.json({
       data: {
         customerId,
-        phase: 4,
-        modules: { supplyChain: 'AVAILABLE', intelligence: 'CLAIM_EXTRACTION_AVAILABLE', review: 'NOT_CONFIGURED' },
+        phase: 'POC_V1',
+        modules: { supplyChain: 'AVAILABLE', intelligence: 'NEWS_RADAR_AVAILABLE', dailyBrief: 'AVAILABLE', enterpriseWorkflows: 'DISABLED' },
       },
     });
   });
 
   app.use('/api', createSupplyChainRouter(resolveUser));
   app.use('/api', createSourceIntelligenceRouter(resolveUser));
-  app.use('/api', createExtractionRouter(resolveUser));
-  app.use('/api', createPocEvaluationRouter(resolveUser));
-  app.use('/api', createEventRouter(resolveUser));
-  app.use('/api', createCustomerExposureRouter(resolveUser));
   app.use('/api', createNewsRadarRouter(resolveUser));
   app.use(supplyChainErrorHandler);
 

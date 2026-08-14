@@ -61,10 +61,12 @@ describe.sequential('SupplyChainService with PostgreSQL', () => {
       transportMode: 'SEA',
       criticality: 'HIGH',
     });
-    const port = await service.createPort({
+    const port = await service.createCustomerPort(customerA.id, {
       name: 'Integration Port',
       country: 'Netherlands',
       portCode: 'ITP',
+      routeId: routeA.id,
+      sequence: 1,
     });
 
     await service.attach(
@@ -92,7 +94,6 @@ describe.sequential('SupplyChainService with PostgreSQL', () => {
       supplierA.id,
     );
     await service.attach(customerA.id, 'route-factory', routeA.id, factoryA.id);
-    await service.addRoutePort(customerA.id, routeA.id, port.id, 1);
 
     await expect(
       service.attach(
