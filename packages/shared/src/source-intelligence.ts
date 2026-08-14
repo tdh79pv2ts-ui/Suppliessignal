@@ -84,7 +84,7 @@ export const manualArticleSchema = z.object({
   sourceId: z.string().uuid(),
   originalUrl: webUrl,
   title: z.string().trim().min(1).max(1000),
-  publishedAt: z.string().datetime().nullable().optional(),
+  publishedAt: z.string().datetime(),
   text: z.string().max(1_000_000).nullable().optional(),
   author: optionalText,
   language: optionalText,

@@ -58,6 +58,7 @@ const topicTerms: Record<NewsRadarTopic, string[]> = {
   LOGISTICS: ['port closure', 'shipping delay', 'shipping disruption', 'freight disruption', 'route disruption', 'port congestion', 'border closure'],
   ENVIRONMENTAL: ['flood', 'flooding', 'earthquake', 'storm', 'cyclone', 'typhoon', 'wildfire', 'drought'],
   TRADE: ['sanction', 'tariff', 'trade restriction', 'export control', 'export restriction', 'import restriction', 'customs restriction'],
+  TECHNOLOGY: ['semiconductor restriction', 'technology export control', 'cyber incident', 'cyberattack', 'cyber attack'],
 };
 
 const disruptionTerms = [
@@ -65,6 +66,7 @@ const disruptionTerms = [
   'restriction', 'halt', 'shutdown', 'strike', 'fire', 'flood', 'flooding',
   'earthquake', 'storm', 'cyclone', 'typhoon', 'bankruptcy', 'sanction', 'tariff',
   'export control', 'cyber incident', 'congestion', 'explosion',
+  'cyberattack', 'cyber attack',
 ];
 
 export function normalizeRadarText(value: string): string {
@@ -108,7 +110,9 @@ export function matchArticleToSupplyChain(
 ): { topics: NewsRadarTopic[]; matches: NewsRadarMatch[]; detectedTerms: string[]; detectedLocations: string[] } {
   const text = normalizeRadarText([article.title, article.excerpt, article.normalizedText].filter(Boolean).join(' '));
   const topics = detectNewsRadarTopics(text);
-  const hasDisruption = disruptionTerms.some((term) => containsPhrase(text, term));
+  const magnitudeSignal = /\bm [4-9](?: \d+)?\b/.test(text);
+  const hasDisruption = magnitudeSignal || disruptionTerms.some((term) => containsPhrase(text, term));
+  if (magnitudeSignal && !topics.includes('ENVIRONMENTAL')) topics.push('ENVIRONMENTAL');
   const matches: NewsRadarMatch[] = [];
   const detectedTerms = new Set<string>();
   const detectedLocations = new Set<string>();
@@ -147,7 +151,7 @@ export function matchArticleToSupplyChain(
   for (const factory of graph.factories) {
     const named = containsPhrase(text, factory.name) && factoryNameCounts.get(normalizeRadarText(factory.name)) === 1;
     const cityCountry = containsPhrase(text, factory.city) && containsPhrase(text, factory.country);
-    const countryOnly = !cityCountry && containsPhrase(text, factory.country) && /factor|production|manufactur/.test(text);
+    const countryOnly = !cityCountry && containsPhrase(text, factory.country);
     if (!named && !cityCountry && !countryOnly) continue;
     const method: NewsRadarMatchMethod = named ? 'UNIQUE_EXACT_NAME' : cityCountry ? 'EXACT_CITY_COUNTRY' : 'EXACT_COUNTRY';
     const terms = named ? [factory.name] : [factory.city, factory.country].filter(Boolean) as string[];

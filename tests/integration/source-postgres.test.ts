@@ -123,6 +123,7 @@ describe.sequential('source intelligence with PostgreSQL', () => {
       sourceId: other.id,
       originalUrl: 'https://other.example/story',
       title: 'Similar story',
+      publishedAt: new Date().toISOString(),
       text: articles[0]!.normalizedText!,
     });
     expect(

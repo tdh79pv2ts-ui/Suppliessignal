@@ -128,8 +128,23 @@ const pinnedRequest: PinnedRequester = (url, address, options) =>
           'user-agent':
             'SupplySignalCollector/1.0 (+https://suppliesignal.local)',
         },
-        lookup: (_hostname, _lookupOptions, callback) =>
-          callback(null, address, isIP(address)),
+        lookup: (_hostname, lookupOptions, callback) => {
+          const family = isIP(address);
+          if (typeof lookupOptions === 'object' && lookupOptions.all) {
+            const allCallback = callback as unknown as (
+              error: null,
+              addresses: Array<{ address: string; family: number }>,
+            ) => void;
+            allCallback(null, [{ address, family }]);
+            return;
+          }
+          const singleCallback = callback as unknown as (
+            error: null,
+            resolvedAddress: string,
+            resolvedFamily: number,
+          ) => void;
+          singleCallback(null, address, family);
+        },
         ...(url.protocol === 'https:' ? { servername: url.hostname } : {}),
       },
       (response) => {

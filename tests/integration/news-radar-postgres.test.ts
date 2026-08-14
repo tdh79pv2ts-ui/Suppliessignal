@@ -42,6 +42,19 @@ describe.sequential('news radar with PostgreSQL', () => {
     expect(await db.newsRadarExposure.count({ where: { sourceArticleId: ids.article, customerId: ids.customerA } })).toBe(1);
   });
 
+  it('does not generate a scheduled brief for a disabled preference', async () => {
+    await briefService.updatePreference(ids.customerA, ids.user, {
+      enabled: false,
+      deliveryTime: '00:00',
+      timezone: 'UTC',
+      email: 'brief@example.test',
+    });
+    await briefService.generateDue(new Date('2035-01-02T12:00:00Z'));
+    expect(await db.dailyBrief.count({
+      where: { customerId: ids.customerA, briefDate: new Date('2035-01-02T00:00:00Z') },
+    })).toBe(0);
+  });
+
   it('stores membership-bound preferences and generates one idempotent evidence-linked daily brief', async () => {
     await expect(briefService.updatePreference(ids.customerA, ids.user, { enabled: true, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'brief@example.test' })).resolves.toMatchObject({ enabled: true });
     const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);

@@ -3,7 +3,7 @@ export type CollectedItem = {
   originalUrl: string;
   externalId?: string;
   author?: string;
-  publishedAt?: Date;
+  publishedAt: Date;
   rawText?: string;
   excerpt?: string;
   language?: string;

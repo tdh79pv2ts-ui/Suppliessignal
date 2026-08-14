@@ -214,10 +214,8 @@ export class SourceIntelligenceService {
     return this.persistItem(source, {
       title: input.title,
       originalUrl: input.originalUrl,
+      publishedAt: new Date(input.publishedAt),
       ...(input.author ? { author: input.author } : {}),
-      ...(input.publishedAt
-        ? { publishedAt: new Date(input.publishedAt) }
-        : {}),
       ...(input.text ? { rawText: input.text } : {}),
       ...(input.language ? { language: input.language } : {}),
     });

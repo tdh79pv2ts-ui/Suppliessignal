@@ -23,7 +23,7 @@ PostgreSQL remains the system of record. Original article URLs and source metada
 
 ## Customer experience
 
-The customer-facing navigation exposes Dashboard, Supply chain, News radar, Daily brief and Settings. ADMIN/REVIEWER may additionally inspect Sources and Articles. Claims, extraction, Events, exposure candidates, identities and review workflows are not registered in the POC application or exposed in its frontend.
+The customer-facing navigation exposes Dashboard, Supply chain, News radar, Daily brief and Settings. ADMIN/REVIEWER may additionally inspect Sources and Articles. Claims, extraction, Events, exposure candidates, identities and review workflows remain available through their existing authorized APIs for backward compatibility, but are not exposed in the simplified POC frontend.
 
 The Daily Brief contains:
 
@@ -38,19 +38,29 @@ Every intelligence item links to the original source, publication date, determin
 
 The fictional `European Electronics Manufacturer` workspace contains exactly 20 suppliers, 50 factories, 30 products, 20 materials, 15 routes and 10 route-linked ports on a clean seed. It covers electronics relationships across China, Taiwan, Vietnam, Malaysia, Indonesia, Chile, the USA, Germany and the Netherlands.
 
-The seed includes exactly 100 clearly labelled synthetic demo articles under `.invalid` URLs. They exercise supplier, factory, product, material, route and port matches across operational, logistics, trade and economic scenarios. These fixtures are not presented as real reporting and never use a real publisher identity.
+The seed never creates articles or intelligence. It enables two publisher-owned feeds: the USGS Significant Earthquakes Atom feed and the World Trade Organization news RSS feed. Collection stores only feed items with an original URL, source/publisher and valid publication date. Live article counts therefore depend on publisher availability and collection time.
 
 The separate BSK Fashion workspace remains based only on public BSK master data. Unknown BSK suppliers, routes and ports remain empty.
+
+## Real-news strategy
+
+- USGS Significant Earthquakes: `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom`
+- World Trade Organization News: `https://www.wto.org/library/rss/latest_news_e.xml`
+
+Both are first-party publisher feeds and run on the default 15-minute collection schedule. URL/content hashes prevent repeat ingestion, collection runs record health and failures, and the SSRF-safe client pins the validated public IP through the actual request and every redirect. Feed entries without a valid publisher-owned URL, title or publication date are rejected instead of being converted into intelligence.
+
+Monitoring vocabulary is derived at processing time from the customer's active supplier, factory, product, material, route, port and country data. Signal classification covers operational, logistics, geopolitical, economic, technology, trade and environmental developments. Matching remains deterministic: exact identity, exact location/country, exact material/product, exact route endpoints or exact route-port membership.
 
 ## Scope and limitations
 
 - Matching is exact and deterministic. There is no AI/fuzzy graph matching or opaque score.
 - Match confidence describes identity/location specificity, not risk, impact or priority.
 - CSV import is omitted because functional manual input already exists and a reliable CSV mapping workflow was not necessary for this POC.
-- RSS/Atom feeds require ADMIN verification and activation. The seed does not activate unverified feeds or bypass publisher restrictions.
+- Only the two documented official RSS/Atom feeds are enabled by the seed. Additional feeds require ADMIN verification and activation; collection never bypasses publisher restrictions.
+- Exact country matching is intentionally conservative in interpretation: it indicates a geographic dependency, not proven physical impact at a specific facility.
 - Outbound email delivery is not connected. Preferences and scheduled brief generation are functional; the brief is delivered in-app.
 - The supply-chain snapshot is factual current state, not a fabricated change log.
-- Existing enterprise tables remain in migration history for data safety, but their routes and UI are inactive in this POC.
+- Existing enterprise tables and authorized APIs remain intact for data safety, while their UI is inactive in this POC.
 
 ## Future roadmap
 

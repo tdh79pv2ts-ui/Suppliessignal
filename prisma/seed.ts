@@ -699,13 +699,6 @@ async function main() {
       'LOGISTICS',
       'PRIMARY',
     ],
-    [
-      'World Trade Organization',
-      'https://www.wto.org/',
-      null,
-      'TRADE',
-      'PRIMARY',
-    ],
     ['ASEAN', 'https://www.asean.org/', null, 'TRADE', 'PRIMARY'],
     ['World Bank', 'https://www.worldbank.org/', null, 'TRADE', 'HIGH'],
   ] as const;
@@ -726,226 +719,47 @@ async function main() {
       });
   }
 
-  const radarSourceId = 'a1000000-0000-4000-8000-000000000001';
-  await prisma.source.upsert({
-    where: { id: radarSourceId },
-    update: {},
-    create: {
-      id: radarSourceId,
-      name: 'Fictional Supply Chain News Desk',
-      sourceType: 'MANUAL',
-      baseUrl: 'https://news-radar-fixture.invalid',
-      category: 'NEWS',
-      reliability: 'HIGH',
-      active: true,
-      collectionEnabled: false,
-      collectionIntervalMinutes: 15,
-    },
-  });
-  const radarFixtures = [
+  const realNewsSources = [
     {
-      articleId: 'a2000000-0000-4000-8000-000000000001',
-      exposureId: 'a3000000-0000-4000-8000-000000000001',
-      title: 'Fictional fire halts work at Hanoi Control Systems Plant',
-      text: 'A fictional fire caused a production shutdown at Hanoi Control Systems Plant in Hanoi, Vietnam.',
-      entityType: 'FACTORY' as const,
-      topic: 'OPERATIONAL' as const,
-      method: 'UNIQUE_EXACT_NAME' as const,
-      matchKey: `factory:${factoryRows[0][0]}`,
-      confidence: 0.92,
-      reason: 'Factory name occurs exactly in disruptive coverage.',
-      matchedTerms: ['Hanoi Control Systems Plant'],
-      factoryId: factoryRows[0][0],
-      path: [
-        { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
-        { nodeType: 'SUPPLIER', id: supplierRows[0][0], label: supplierRows[0][1], relationship: 'explicit supplier' },
-        { nodeType: 'FACTORY', id: factoryRows[0][0], label: factoryRows[0][2], relationship: 'explicit factory' },
-      ],
+      id: 'a1000000-0000-4000-8000-000000000001',
+      name: 'USGS Significant Earthquakes',
+      sourceType: 'ATOM' as const,
+      baseUrl: 'https://earthquake.usgs.gov/',
+      feedUrl:
+        'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom',
+      category: 'WEATHER' as const,
     },
     {
-      articleId: 'a2000000-0000-4000-8000-000000000002',
-      exposureId: 'a3000000-0000-4000-8000-000000000002',
-      title: 'Fictional Port of Hai Phong closure delays shipping',
-      text: 'A fictional port closure at the Port of Hai Phong caused shipping delays.',
-      entityType: 'PORT' as const,
-      topic: 'LOGISTICS' as const,
-      method: 'EXACT_PORT_NAME' as const,
-      matchKey: `port:${routeRows[0][0]}:${ports[0][0]}`,
-      confidence: 0.93,
-      reason: 'A named port is explicitly present on this customer route.',
-      matchedTerms: ['Port of Hai Phong'],
-      routePortRouteId: routeRows[0][0],
-      portId: ports[0][0],
-      path: [
-        { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
-        { nodeType: 'ROUTE', id: routeRows[0][0], label: routeRows[0][1], relationship: 'explicit route' },
-        { nodeType: 'PORT', id: ports[0][0], label: ports[0][1], relationship: 'route port sequence 1' },
-      ],
-    },
-    {
-      articleId: 'a2000000-0000-4000-8000-000000000003',
-      exposureId: 'a3000000-0000-4000-8000-000000000003',
-      title: 'Fictional export restriction affects Delta Circuit Systems in Vietnam',
-      text: 'A fictional export restriction affects Delta Circuit Systems in Vietnam.',
-      entityType: 'SUPPLIER' as const,
-      topic: 'TRADE' as const,
-      method: 'NAME_AND_LOCATION' as const,
-      matchKey: `supplier:${supplierRows[0][0]}`,
-      confidence: 0.9,
-      reason: 'Supplier name and location occur exactly in disruptive coverage.',
-      matchedTerms: ['Delta Circuit Systems', 'Vietnam'],
-      supplierId: supplierRows[0][0],
-      path: [
-        { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
-        { nodeType: 'SUPPLIER', id: supplierRows[0][0], label: supplierRows[0][1], relationship: 'explicit supplier' },
-      ],
-    },
-    {
-      articleId: 'a2000000-0000-4000-8000-000000000004',
-      exposureId: 'a3000000-0000-4000-8000-000000000004',
-      title: 'Fictional semiconductor shortage disrupts control module production',
-      text: 'A fictional semiconductor shortage disrupts Industrial Control Module production across the region.',
-      entityType: 'MATERIAL' as const,
-      topic: 'OPERATIONAL' as const,
-      method: 'UNIQUE_EXACT_NAME' as const,
-      matchKey: `material:${materialIds[0]}`,
-      confidence: 0.84,
-      reason: 'Material or commodity name occurs exactly in disruptive coverage.',
-      matchedTerms: ['Semiconductors'],
-      materialId: materialIds[0],
-      path: [
-        { nodeType: 'CUSTOMER', id: customer.id, label: customer.name },
-        { nodeType: 'PRODUCT', id: productRows[0][0], label: productRows[0][1], relationship: 'explicit product' },
-        { nodeType: 'MATERIAL', id: materialIds[0], label: materialNames[0], relationship: 'explicit product material' },
-      ],
+      id: 'a1000000-0000-4000-8000-000000000002',
+      name: 'World Trade Organization News',
+      sourceType: 'RSS' as const,
+      baseUrl: 'https://www.wto.org/',
+      feedUrl: 'https://www.wto.org/library/rss/latest_news_e.xml',
+      category: 'TRADE' as const,
     },
   ];
-  for (const fixture of radarFixtures) {
-    await prisma.sourceArticle.upsert({
-      where: { id: fixture.articleId },
-      update: {},
+  for (const source of realNewsSources) {
+    await prisma.source.upsert({
+      where: { id: source.id },
+      update: {
+        name: source.name,
+        sourceType: source.sourceType,
+        baseUrl: source.baseUrl,
+        feedUrl: source.feedUrl,
+        category: source.category,
+        reliability: 'PRIMARY',
+        active: true,
+        collectionEnabled: true,
+        collectionIntervalMinutes: 15,
+      },
       create: {
-        id: fixture.articleId,
-        sourceId: radarSourceId,
-        originalUrl: `https://news-radar-fixture.invalid/articles/${fixture.articleId}`,
-        title: fixture.title,
-        excerpt: fixture.text,
-        normalizedText: fixture.text,
-        publishedAt: new Date('2026-08-13T00:00:00Z'),
-        contentHash: `news-radar-content-${fixture.articleId}`,
-        urlHash: `news-radar-url-${fixture.articleId}`,
-        status: 'NORMALIZED',
+        ...source,
+        reliability: 'PRIMARY',
+        active: true,
+        collectionEnabled: true,
+        collectionIntervalMinutes: 15,
       },
     });
-    await prisma.newsRadarArticleProcessing.upsert({
-      where: { sourceArticleId: fixture.articleId },
-      update: {},
-      create: {
-        sourceArticleId: fixture.articleId,
-        status: 'COMPLETED',
-        ownerToken: 'a4000000-0000-4000-8000-000000000001',
-        leaseExpiresAt: new Date('2026-08-13T00:00:00Z'),
-        completedAt: new Date('2026-08-13T00:00:00Z'),
-        topics: [fixture.topic],
-        detectedTerms: fixture.matchedTerms,
-        detectedLocations: fixture.matchedTerms.filter((value) => ['Vietnam', 'Hanoi', 'Port of Hai Phong'].includes(value)),
-      },
-    });
-    await prisma.newsRadarExposure.upsert({
-      where: { customerId_sourceArticleId_matchKey: { customerId: customer.id, sourceArticleId: fixture.articleId, matchKey: fixture.matchKey } },
-      update: {},
-      create: {
-        id: fixture.exposureId,
-        customerId: customer.id,
-        sourceArticleId: fixture.articleId,
-        matchKey: fixture.matchKey,
-        entityType: fixture.entityType,
-        topic: fixture.topic,
-        matchMethod: fixture.method,
-        confidence: fixture.confidence,
-        reason: fixture.reason,
-        matchedTerms: fixture.matchedTerms,
-        pathSnapshot: fixture.path,
-        supplierId: 'supplierId' in fixture ? fixture.supplierId : undefined,
-        factoryId: 'factoryId' in fixture ? fixture.factoryId : undefined,
-        materialId: 'materialId' in fixture ? fixture.materialId : undefined,
-        routePortRouteId: 'routePortRouteId' in fixture ? fixture.routePortRouteId : undefined,
-        portId: 'portId' in fixture ? fixture.portId : undefined,
-      },
-    });
-  }
-
-  for (let index = 5; index <= 100; index++) {
-    const articleId = `a2000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
-    const exposureId = `a3000000-0000-4000-8000-${String(index).padStart(12, '0')}`;
-    const kind = index % 6;
-    const supplier = allSuppliers[index % allSuppliers.length]!;
-    const factory = allFactories[index % allFactories.length]!;
-    const product = allProducts[index % allProducts.length]!;
-    const material = allMaterials[index % allMaterials.length]!;
-    const route = allRoutes[index % allRoutes.length]!;
-    const publishedAt = new Date(Date.UTC(2026, 7, 13, index % 24, index % 60));
-    const base = {
-      title: '', text: '', entityType: 'SUPPLIER' as 'SUPPLIER' | 'FACTORY' | 'PRODUCT' | 'MATERIAL' | 'ROUTE' | 'PORT',
-      topic: 'OPERATIONAL' as 'OPERATIONAL' | 'LOGISTICS' | 'TRADE' | 'ECONOMIC',
-      method: 'UNIQUE_EXACT_NAME' as 'UNIQUE_EXACT_NAME' | 'NAME_AND_LOCATION' | 'EXACT_PORT_NAME',
-      matchKey: '', confidence: 0.84, reason: '', matchedTerms: [] as string[], path: [] as Array<{ nodeType: string; id: string; label: string; relationship?: string }>,
-      supplierId: undefined as string | undefined, factoryId: undefined as string | undefined,
-      productId: undefined as string | undefined, materialId: undefined as string | undefined,
-      routeId: undefined as string | undefined, routePortRouteId: undefined as string | undefined,
-      portId: undefined as string | undefined,
-    };
-    const customerPath = { nodeType: 'CUSTOMER', id: customer.id, label: customer.name };
-    if (kind === 0) Object.assign(base, {
-      title: `Fictional export restriction affects ${supplier.name} in ${supplier.country}`,
-      text: `A fictional export restriction affects ${supplier.name} operations in ${supplier.city}, ${supplier.country}.`,
-      entityType: 'SUPPLIER', topic: 'TRADE', method: 'NAME_AND_LOCATION', matchKey: `supplier:${supplier.id}`, confidence: 0.9,
-      reason: 'Supplier name and location occur exactly in disruptive coverage.', matchedTerms: [supplier.name, supplier.country], supplierId: supplier.id,
-      path: [customerPath, { nodeType: 'SUPPLIER', id: supplier.id, label: supplier.name, relationship: 'explicit synthetic demo supplier' }],
-    });
-    if (kind === 1) Object.assign(base, {
-      title: `Fictional fire disrupts ${factory.name}`,
-      text: `A fictional fire caused a production shutdown at ${factory.name} in ${factory.city}, ${factory.country}.`,
-      entityType: 'FACTORY', matchKey: `factory:${factory.id}`, confidence: 0.92,
-      reason: 'Factory name occurs exactly in disruptive coverage.', matchedTerms: [factory.name], factoryId: factory.id,
-      path: [customerPath, { nodeType: 'SUPPLIER', id: factory.supplierId, label: allSuppliers.find((item) => item.id === factory.supplierId)?.name ?? 'Supplier', relationship: 'explicit synthetic demo supplier' }, { nodeType: 'FACTORY', id: factory.id, label: factory.name, relationship: 'explicit synthetic demo factory' }],
-    });
-    if (kind === 2) Object.assign(base, {
-      title: `Fictional component shortage disrupts ${product.name} production`,
-      text: `A fictional component shortage disrupts production of the ${product.name}.`,
-      entityType: 'PRODUCT', matchKey: `product:${product.id}`, confidence: 0.82,
-      reason: 'Product name occurs exactly in disruptive coverage.', matchedTerms: [product.name], productId: product.id,
-      path: [customerPath, { nodeType: 'PRODUCT', id: product.id, label: product.name, relationship: 'explicit synthetic demo product' }],
-    });
-    if (kind === 3) Object.assign(base, {
-      title: `Fictional ${material.name} shortage affects electronics manufacturing`,
-      text: `A fictional ${material.name} shortage disrupts electronics production.`,
-      entityType: 'MATERIAL', topic: 'ECONOMIC', matchKey: `material:${material.id}`, confidence: 0.84,
-      reason: 'Material name occurs exactly in disruptive coverage.', matchedTerms: [material.name], materialId: material.id,
-      path: [customerPath, { nodeType: 'PRODUCT', id: product.id, label: product.name, relationship: 'explicit synthetic demo product' }, { nodeType: 'MATERIAL', id: material.id, label: material.name, relationship: 'explicit synthetic demo material' }],
-    });
-    if (kind === 4) Object.assign(base, {
-      title: `Fictional shipping disruption on ${route.name}`,
-      text: `A fictional route disruption caused shipping delays on the ${route.name}.`,
-      entityType: 'ROUTE', topic: 'LOGISTICS', matchKey: `route:${route.id}`, confidence: 0.9,
-      reason: 'Route name occurs exactly in disruptive coverage.', matchedTerms: [route.name], routeId: route.id,
-      path: [customerPath, { nodeType: 'ROUTE', id: route.id, label: route.name, relationship: 'explicit synthetic demo route' }],
-    });
-    if (kind === 5) {
-      const routeIndex = index % allRoutes.length;
-      const routeForPort = allRoutes[routeIndex]!;
-      const routePort = allPorts[routeIndex % allPorts.length]!;
-      Object.assign(base, {
-        title: `Fictional port closure at ${routePort.name}`,
-        text: `A fictional port closure at ${routePort.name} caused shipping delays.`,
-        entityType: 'PORT', topic: 'LOGISTICS', method: 'EXACT_PORT_NAME', matchKey: `port:${routeForPort.id}:${routePort.id}`, confidence: 0.93,
-        reason: 'A named port is explicitly present on this synthetic customer route.', matchedTerms: [routePort.name], routePortRouteId: routeForPort.id, portId: routePort.id,
-        path: [customerPath, { nodeType: 'ROUTE', id: routeForPort.id, label: routeForPort.name, relationship: 'explicit synthetic demo route' }, { nodeType: 'PORT', id: routePort.id, label: routePort.name, relationship: 'explicit route port' }],
-      });
-    }
-    await prisma.sourceArticle.upsert({ where: { id: articleId }, update: { title: base.title, excerpt: base.text, normalizedText: base.text, publishedAt }, create: { id: articleId, sourceId: radarSourceId, originalUrl: `https://news-radar-fixture.invalid/articles/${articleId}`, title: base.title, excerpt: base.text, normalizedText: base.text, publishedAt, contentHash: `news-radar-content-${articleId}`, urlHash: `news-radar-url-${articleId}`, status: 'NORMALIZED' } });
-    await prisma.newsRadarArticleProcessing.upsert({ where: { sourceArticleId: articleId }, update: { status: 'COMPLETED', topics: [base.topic], detectedTerms: base.matchedTerms, completedAt: publishedAt }, create: { sourceArticleId: articleId, status: 'COMPLETED', ownerToken: 'a4000000-0000-4000-8000-000000000001', leaseExpiresAt: publishedAt, completedAt: publishedAt, topics: [base.topic], detectedTerms: base.matchedTerms, detectedLocations: base.entityType === 'PORT' ? base.matchedTerms : [] } });
-    await prisma.newsRadarExposure.upsert({ where: { customerId_sourceArticleId_matchKey: { customerId: customer.id, sourceArticleId: articleId, matchKey: base.matchKey } }, update: { topic: base.topic, reason: base.reason, pathSnapshot: base.path }, create: { id: exposureId, customerId: customer.id, sourceArticleId: articleId, matchKey: base.matchKey, entityType: base.entityType, topic: base.topic, matchMethod: base.method, confidence: base.confidence, reason: base.reason, matchedTerms: base.matchedTerms, pathSnapshot: base.path, supplierId: base.supplierId, factoryId: base.factoryId, productId: base.productId, materialId: base.materialId, routeId: base.routeId, routePortRouteId: base.routePortRouteId, portId: base.portId } });
   }
 
   await prisma.newsletterPreference.upsert({
@@ -953,224 +767,6 @@ async function main() {
     update: {},
     create: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id, enabled: false, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'customer@demo.suppliesignal.local' },
   });
-  const demoBrief = await prisma.dailyBrief.upsert({
-    where: { customerId_briefDate: { customerId: customer.id, briefDate: new Date('2026-08-14T00:00:00Z') } },
-    update: { graphRevision: 0, supplyChainSnapshot: { suppliers: 20, factories: 50, products: 30, materials: 20, routes: 15, ports: 10 } },
-    create: { customerId: customer.id, briefDate: new Date('2026-08-14T00:00:00Z'), graphRevision: 0, supplyChainSnapshot: { suppliers: 20, factories: 50, products: 30, materials: 20, routes: 15, ports: 10 } },
-  });
-  await prisma.dailyBriefItem.deleteMany({ where: { briefId: demoBrief.id } });
-  await prisma.dailyBriefItem.createMany({ data: Array.from({ length: 20 }, (_, offset) => ({ customerId: customer.id, briefId: demoBrief.id, exposureId: `a3000000-0000-4000-8000-${String(100 - offset).padStart(12, '0')}`, section: offset < 5 ? 'TOP_DEVELOPMENTS' : offset < 15 ? 'POTENTIAL_EXPOSURES' : 'WATCHLIST', position: offset + 1 })) });
-
-  const eventFixtureSourceId = '91000000-0000-4000-8000-000000000001';
-  await prisma.source.upsert({
-    where: { id: eventFixtureSourceId },
-    update: {},
-    create: {
-      id: eventFixtureSourceId,
-      name: 'Fictional Phase 5 Event Bulletin',
-      sourceType: 'MANUAL',
-      baseUrl: 'https://phase5-fixture.invalid',
-      category: 'OTHER',
-      reliability: 'HIGH',
-      active: true,
-      collectionEnabled: false,
-    },
-  });
-  const eventFixtureSourceTwoId = '91000000-0000-4000-8000-000000000002';
-  await prisma.source.upsert({
-    where: { id: eventFixtureSourceTwoId },
-    update: {},
-    create: {
-      id: eventFixtureSourceTwoId,
-      name: 'Fictional Independent Logistics Bulletin',
-      sourceType: 'MANUAL',
-      baseUrl: 'https://phase5-independent-fixture.invalid',
-      category: 'LOGISTICS',
-      reliability: 'HIGH',
-      active: true,
-      collectionEnabled: false,
-    },
-  });
-
-  const fixtureClaims = [
-    {
-      articleId: '92000000-0000-4000-8000-000000000001',
-      runId: '93000000-0000-4000-8000-000000000001',
-      claimId: '94000000-0000-4000-8000-000000000001',
-      sourceId: eventFixtureSourceId,
-      title: 'Fictional Port Aurora disruption report',
-      statement: 'Port Aurora operations were disrupted on 2 March 2026.',
-      claimType: 'PORT_DISRUPTION' as const,
-      assertionMode: 'OBSERVED' as const,
-      entityType: 'PORT' as const,
-      entityName: 'Port Aurora',
-      date: new Date('2026-03-02T00:00:00Z'),
-    },
-    {
-      articleId: '92000000-0000-4000-8000-000000000002',
-      runId: '93000000-0000-4000-8000-000000000002',
-      claimId: '94000000-0000-4000-8000-000000000002',
-      sourceId: eventFixtureSourceTwoId,
-      title: 'Independent fictional Port Aurora update',
-      statement: 'A second bulletin confirmed disruption at Port Aurora.',
-      claimType: 'PORT_DISRUPTION' as const,
-      assertionMode: 'OBSERVED' as const,
-      entityType: 'PORT' as const,
-      entityName: 'Port Aurora',
-      date: new Date('2026-03-02T00:00:00Z'),
-    },
-    {
-      articleId: '92000000-0000-4000-8000-000000000003',
-      runId: '93000000-0000-4000-8000-000000000003',
-      claimId: '94000000-0000-4000-8000-000000000003',
-      sourceId: eventFixtureSourceId,
-      title: 'Fictional Port Aurora fire',
-      statement: 'A small fire occurred at Port Aurora.',
-      claimType: 'FIRE' as const,
-      assertionMode: 'OBSERVED' as const,
-      entityType: 'PORT' as const,
-      entityName: 'Port Aurora',
-      date: new Date('2026-03-02T00:00:00Z'),
-    },
-    {
-      articleId: '92000000-0000-4000-8000-000000000004',
-      runId: '93000000-0000-4000-8000-000000000004',
-      claimId: '94000000-0000-4000-8000-000000000004',
-      sourceId: eventFixtureSourceId,
-      title: 'Fictional Port Aurora forecast',
-      statement: 'Analysts forecast a possible future Port Aurora disruption.',
-      claimType: 'PORT_DISRUPTION' as const,
-      assertionMode: 'FORECAST' as const,
-      entityType: 'PORT' as const,
-      entityName: 'Port Aurora',
-      date: new Date('2026-04-02T00:00:00Z'),
-    },
-    {
-      articleId: '92000000-0000-4000-8000-000000000005',
-      runId: '93000000-0000-4000-8000-000000000005',
-      claimId: '94000000-0000-4000-8000-000000000005',
-      sourceId: eventFixtureSourceId,
-      title: 'Fictional conflicting Port Aurora update',
-      statement: 'The announced Port Aurora disruption was cancelled.',
-      claimType: 'PORT_DISRUPTION' as const,
-      assertionMode: 'OBSERVED' as const,
-      entityType: 'PORT' as const,
-      entityName: 'Port Aurora',
-      date: new Date('2026-03-02T00:00:00Z'),
-    },
-  ];
-  for (const fixture of fixtureClaims) {
-    await prisma.sourceArticle.upsert({
-      where: { id: fixture.articleId },
-      update: {},
-      create: {
-        id: fixture.articleId,
-        sourceId: fixture.sourceId,
-        originalUrl: `https://phase5-fixture.invalid/articles/${fixture.articleId}`,
-        title: fixture.title,
-        normalizedText: fixture.statement,
-        publishedAt: fixture.date,
-        contentHash: `phase5-content-${fixture.articleId}`,
-        urlHash: `phase5-url-${fixture.articleId}`,
-        status: 'NORMALIZED',
-      },
-    });
-    await prisma.articleExtractionRun.upsert({
-      where: { id: fixture.runId },
-      update: {},
-      create: {
-        id: fixture.runId,
-        sourceArticleId: fixture.articleId,
-        status: 'COMPLETED',
-        provider: 'fixture',
-        model: 'deterministic-phase5',
-        promptVersion: 'fixture-1',
-        schemaVersion: '1.0',
-        inputHash: `phase5-input-${fixture.runId}`,
-        inputCharacters: fixture.statement.length,
-        claimsExtracted: 1,
-        articleRelevant: true,
-        completedAt: fixture.date,
-      },
-    });
-    await prisma.claim.upsert({
-      where: { id: fixture.claimId },
-      update: {},
-      create: {
-        id: fixture.claimId,
-        sourceArticleId: fixture.articleId,
-        extractionRunId: fixture.runId,
-        claimType: fixture.claimType,
-        assertionMode: fixture.assertionMode,
-        statement: fixture.statement,
-        confidence: 0.85,
-        occurredAt: fixture.date,
-        evidenceText: fixture.statement,
-        evidenceStart: 0,
-        evidenceEnd: fixture.statement.length,
-        entities: {
-          create: {
-            entityType: fixture.entityType,
-            name: fixture.entityName,
-            role: 'affected',
-          },
-        },
-        locations: {
-          create: {
-            name: 'Aurora Harbor',
-            city: 'Aurora Harbor',
-            country: 'Fictionland',
-          },
-        },
-      },
-    });
-  }
-
-  const ambiguousEvents = [
-    ['95000000-0000-4000-8000-000000000001', '2026-05-01'],
-    ['95000000-0000-4000-8000-000000000002', '2026-05-03'],
-  ] as const;
-  for (const [id, dateText] of ambiguousEvents) {
-    const date = new Date(`${dateText}T00:00:00Z`);
-    await prisma.event.upsert({
-      where: { id },
-      update: {},
-      create: {
-        id,
-        eventType: 'STRIKE',
-        status: 'DETECTED',
-        title: 'Fictional ambiguous Harbor Works strike candidate',
-        summary: 'A fictional candidate retained to exercise ambiguity.',
-        severity: 'HIGH',
-        confidence: 0.7,
-        assertionMode: 'OBSERVED',
-        occurredAt: date,
-        observedAt: date,
-        temporalPrecision: 'DAY',
-        firstSeenAt: date,
-        lastSeenAt: date,
-        fingerprint: `STRIKE|OBSERVED|FACTORY:harbor works|fictionland::aurora harbor:aurora harbor|${dateText}`,
-        entities: {
-          create: {
-            entityType: 'FACTORY',
-            name: 'Harbor Works',
-            normalizedName: 'harbor works',
-            normalizedKey: 'FACTORY:harbor works',
-            role: 'affected',
-          },
-        },
-        locations: {
-          create: {
-            locationType: 'CITY',
-            name: 'Aurora Harbor',
-            city: 'Aurora Harbor',
-            country: 'Fictionland',
-            normalizedKey: 'fictionland::aurora harbor:aurora harbor',
-          },
-        },
-      },
-    });
-  }
 }
 
 main()

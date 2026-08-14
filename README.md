@@ -58,7 +58,7 @@ pnpm test            # unit and integration tests
 pnpm db:generate     # generate Prisma client
 pnpm db:migrate      # apply/create development migrations
 pnpm db:deploy       # apply existing migrations without reset (staging/production)
-pnpm db:seed         # seed the fictional Phase 1 customer/user
+pnpm db:seed         # seed demo graph/users and verified real-news source configuration
 pnpm db:verify-migrations # clean and Phase 5 hardening upgrade verification
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
 pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process

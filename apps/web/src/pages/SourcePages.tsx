@@ -423,9 +423,7 @@ export function ArticlesPage() {
           originalUrl: d.get('originalUrl'),
           title: d.get('title'),
           text: d.get('text') || null,
-          publishedAt: d.get('publishedAt')
-            ? new Date(String(d.get('publishedAt'))).toISOString()
-            : null,
+          publishedAt: new Date(String(d.get('publishedAt'))).toISOString(),
           author: d.get('author') || null,
           language: d.get('language') || null,
         }),
@@ -467,11 +465,12 @@ export function ArticlesPage() {
           <input name="author" placeholder="Optional author" />
           <input name="language" placeholder="Optional language (for example en)" />
           <label className="text-sm">
-            Optional publication date
+            Publication date
             <input
               className="ml-2 rounded border px-2 py-1"
               name="publishedAt"
               type="datetime-local"
+              required
             />
           </label>
           <textarea name="text" placeholder="Optional source text" />

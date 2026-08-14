@@ -34,6 +34,13 @@ describe('deterministic ingestion', () => {
       externalId: 'atom-1',
     });
   });
+  it('rejects feed items without a valid publication date', () => {
+    const result = parseFeed(
+      '<rss><channel><item><title>Undated</title><link>https://public.example/undated</link></item></channel></rss>',
+      'https://public.example/',
+    );
+    expect(result).toEqual({ items: [], failedItems: 1 });
+  });
   it('normalizes URLs/text and hashes deterministically', () => {
     expect(
       normalizeUrl('HTTPS://PUBLIC.EXAMPLE:443/a/?utm_source=x#fragment'),

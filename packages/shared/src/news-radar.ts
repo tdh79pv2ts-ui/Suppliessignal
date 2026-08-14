@@ -7,6 +7,7 @@ export const newsRadarTopics = [
   'LOGISTICS',
   'ENVIRONMENTAL',
   'TRADE',
+  'TECHNOLOGY',
 ] as const;
 
 export const newsRadarEntityTypes = [

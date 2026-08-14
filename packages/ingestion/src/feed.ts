@@ -43,6 +43,10 @@ export function parseFeed(
         block,
         atom ? ['published', 'updated'] : ['pubDate', 'dc:date'],
       );
+      if (!published || Number.isNaN(Date.parse(published))) {
+        failedItems++;
+        continue;
+      }
       const rawText = value(
         block,
         atom ? ['content', 'summary'] : ['content:encoded', 'description'],
@@ -57,9 +61,7 @@ export function parseFeed(
         originalUrl: new URL(link, baseUrl).toString(),
         ...(externalId ? { externalId } : {}),
         ...(author ? { author } : {}),
-        ...(published && !Number.isNaN(Date.parse(published))
-          ? { publishedAt: new Date(published) }
-          : {}),
+        publishedAt: new Date(published),
         ...(rawText ? { rawText, excerpt: rawText } : {}),
       });
     } catch {

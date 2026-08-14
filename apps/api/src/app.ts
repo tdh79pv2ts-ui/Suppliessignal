@@ -11,6 +11,10 @@ import { createLogger } from './logger.js';
 import { createSupplyChainRouter, supplyChainErrorHandler } from './routes/supply-chain.js';
 import { createSourceIntelligenceRouter } from './routes/source-intelligence.js';
 import { createNewsRadarRouter } from './routes/news-radar.js';
+import { createExtractionRouter } from './routes/extraction.js';
+import { createPocEvaluationRouter } from './routes/poc-evaluation.js';
+import { createEventRouter } from './routes/events.js';
+import { createCustomerExposureRouter } from './routes/customer-exposure.js';
 
 type AppOptions = {
   env: ServerEnv;
@@ -80,6 +84,12 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
   app.use('/api', createSupplyChainRouter(resolveUser));
   app.use('/api', createSourceIntelligenceRouter(resolveUser));
   app.use('/api', createNewsRadarRouter(resolveUser));
+  // Existing enterprise capabilities remain available to their authorized
+  // callers, but are deliberately omitted from the simplified POC navigation.
+  app.use('/api', createExtractionRouter(resolveUser));
+  app.use('/api', createPocEvaluationRouter(resolveUser));
+  app.use('/api', createEventRouter(resolveUser));
+  app.use('/api', createCustomerExposureRouter(resolveUser));
   app.use(supplyChainErrorHandler);
 
   app.use((_request, response) => {

@@ -1,5 +1,5 @@
 <?xml version="1.0"?><rss version="2.0"><channel><title>Fixture</title>
 <item><title>First item</title><link>https://public.example/articles/1?utm_source=test</link><guid>fixture-1</guid><author>Fixture Author</author><pubDate>Tue, 11 Aug 2026 10:00:00 GMT</pubDate><description><![CDATA[<p>Useful &amp; deterministic text.</p>]]></description></item>
 <item><title>Malformed without link</title></item>
-<item><title>Duplicate representation</title><link>https://public.example/articles/1</link><guid>fixture-1</guid></item>
+<item><title>Duplicate representation</title><link>https://public.example/articles/1</link><guid>fixture-1</guid><pubDate>Tue, 11 Aug 2026 10:05:00 GMT</pubDate></item>
 </channel></rss>

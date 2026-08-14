@@ -85,6 +85,7 @@ enum NewsRadarTopic {
   LOGISTICS
   ENVIRONMENTAL
   TRADE
+  TECHNOLOGY
 }
 
 enum NewsRadarEntityType {

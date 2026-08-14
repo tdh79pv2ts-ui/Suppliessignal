@@ -33,6 +33,17 @@ describe('deterministic supply-chain news radar matching', () => {
     expect(match('Flooding disrupts factories in Vietnam')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY' })]));
   });
 
+  it('matches a real-feed-shaped earthquake magnitude to an exact country dependency', () => {
+    const result = match('M 6.2 - 45 km south of Santiago, Chile', graph({
+      factories: [{ id: 'factory-chile', name: 'Chile Materials Plant', country: 'Chile', city: 'Valparaiso' }],
+    }));
+    expect(result).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY', topic: 'ENVIRONMENTAL' })]));
+  });
+
+  it('classifies technology disruptions without fuzzy matching', () => {
+    expect(match('Cyberattack disrupts Foxconn Precision Components production')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'SUPPLIER', topic: 'TECHNOLOGY' })]));
+  });
+
   it('matches a material shortage but ignores an unrelated product mention', () => {
     expect(match('Lithium shortage disrupts regional production')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'MATERIAL' })]));
     expect(match('Battery Module receives an international design award')).toHaveLength(0);
