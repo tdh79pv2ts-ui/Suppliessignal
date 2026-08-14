@@ -155,17 +155,28 @@ async function main() {
   }
 
   const sources = [
-    ['BGMEA', 'https://www.bgmea.com.bd/', 'Bangladesh', 'INDUSTRY', 'MEDIUM'],
-    ['Myanmar National Trade Portal', 'https://www.myanmartradeportal.gov.mm/', 'Myanmar', 'TRADE', 'PRIMARY'],
-    ['Myanmar Customs', 'https://www.customs.gov.mm/', 'Myanmar', 'GOVERNMENT', 'PRIMARY'],
-    ['Guangzhou Municipal Government', 'https://www.gz.gov.cn/', 'China', 'GOVERNMENT', 'PRIMARY'],
-    ['European Commission Trade', 'https://policy.trade.ec.europa.eu/', null, 'REGULATOR', 'PRIMARY'],
-    ['International Maritime Organization', 'https://www.imo.org/', null, 'LOGISTICS', 'PRIMARY'],
+    ['BGMEA', 'https://www.bgmea.com.bd/', 'Bangladesh', 'South Asia', 'Apparel and garment manufacturing', 'INDUSTRY', 'MEDIUM'],
+    ['Myanmar National Trade Portal', 'https://www.myanmartradeportal.gov.mm/', 'Myanmar', 'Southeast Asia', 'Trade and manufacturing', 'TRADE', 'PRIMARY'],
+    ['Myanmar Customs', 'https://www.customs.gov.mm/', 'Myanmar', 'Southeast Asia', 'Customs and logistics', 'GOVERNMENT', 'PRIMARY'],
+    ['Guangzhou Municipal Government', 'https://www.gz.gov.cn/', 'China', 'Greater China', 'Manufacturing and regulation', 'GOVERNMENT', 'PRIMARY'],
+    ['European Commission Trade', 'https://policy.trade.ec.europa.eu/', null, 'Europe', 'Trade regulation', 'REGULATOR', 'PRIMARY'],
+    ['International Maritime Organization', 'https://www.imo.org/', null, null, 'Maritime logistics', 'LOGISTICS', 'PRIMARY'],
   ] as const;
-  for (const [name, baseUrl, country, category, reliability] of sources) if (!await prisma.source.findFirst({ where: { name } })) await prisma.source.create({ data: { name, sourceType: 'WEB', baseUrl, country, category, reliability, active: true, collectionEnabled: false } });
+  for (const [name, baseUrl, country, region, industry, category, reliability] of sources) {
+    const existing = await prisma.source.findFirst({ where: { name } });
+    const data = { name, sourceType: 'WEB' as const, baseUrl, country, region, industry, category, reliability, active: true, collectionEnabled: false };
+    if (existing) await prisma.source.update({ where: { id: existing.id }, data });
+    else await prisma.source.create({ data });
+  }
+  const regionalNewsSources = [
+    { id: 'a2000000-0000-4000-8000-000000000001', name: 'South China Morning Post — China', sourceType: 'RSS' as const, baseUrl: 'https://www.scmp.com/', feedUrl: 'https://www.scmp.com/rss/4/feed', country: 'China', region: 'Greater China', industry: 'Manufacturing, trade and logistics', category: 'LOCAL_NEWS' as const, reliability: 'HIGH' as const, language: 'en' },
+    { id: 'a2000000-0000-4000-8000-000000000002', name: 'The Daily Star — Business', sourceType: 'RSS' as const, baseUrl: 'https://www.thedailystar.net/', feedUrl: 'https://www.thedailystar.net/business/rss.xml', country: 'Bangladesh', region: 'South Asia', industry: 'Apparel, manufacturing and trade', category: 'LOCAL_NEWS' as const, reliability: 'HIGH' as const, language: 'en' },
+    { id: 'a2000000-0000-4000-8000-000000000003', name: 'Myanmar Trade Training Institute', sourceType: 'RSS' as const, baseUrl: 'https://tti.commerce.gov.mm/', feedUrl: 'https://tti.commerce.gov.mm/rss.xml', country: 'Myanmar', region: 'Southeast Asia', industry: 'Trade and manufacturing', category: 'GOVERNMENT' as const, reliability: 'PRIMARY' as const, language: 'en' },
+  ];
+  for (const source of regionalNewsSources) await prisma.source.upsert({ where: { id: source.id }, update: { ...source, active: true, collectionEnabled: true, collectionIntervalMinutes: 5 }, create: { ...source, active: true, collectionEnabled: true, collectionIntervalMinutes: 5 } });
   const realNewsSources = [
-    { id: 'a1000000-0000-4000-8000-000000000001', name: 'USGS Significant Earthquakes', sourceType: 'ATOM' as const, baseUrl: 'https://earthquake.usgs.gov/', feedUrl: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom', category: 'WEATHER' as const },
-    { id: 'a1000000-0000-4000-8000-000000000002', name: 'World Trade Organization News', sourceType: 'RSS' as const, baseUrl: 'https://www.wto.org/', feedUrl: 'https://www.wto.org/library/rss/latest_news_e.xml', category: 'TRADE' as const },
+    { id: 'a1000000-0000-4000-8000-000000000001', name: 'USGS Significant Earthquakes', sourceType: 'ATOM' as const, baseUrl: 'https://earthquake.usgs.gov/', feedUrl: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom', industry: 'Physical disruption monitoring', category: 'WEATHER' as const },
+    { id: 'a1000000-0000-4000-8000-000000000002', name: 'World Trade Organization News', sourceType: 'RSS' as const, baseUrl: 'https://www.wto.org/', feedUrl: 'https://www.wto.org/library/rss/latest_news_e.xml', industry: 'Global trade policy', category: 'TRADE' as const },
   ];
   for (const source of realNewsSources) await prisma.source.upsert({ where: { id: source.id }, update: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 5 }, create: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 5 } });
   await prisma.newsletterPreference.upsert({ where: { userId_customerId: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id } }, update: {}, create: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id, enabled: false, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'customer@demo.suppliesignal.local' } });

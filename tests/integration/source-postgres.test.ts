@@ -74,8 +74,9 @@ describe.sequential('source intelligence with PostgreSQL', () => {
       sourceType: 'RSS',
       baseUrl: 'https://public.example/',
       feedUrl: 'https://public.example/feed.xml',
-      country: null,
-      region: null,
+      country: 'Bangladesh',
+      region: 'South Asia',
+      industry: 'Apparel manufacturing',
       language: 'en',
       category: 'NEWS',
       reliability: 'HIGH',
@@ -102,6 +103,9 @@ describe.sequential('source intelligence with PostgreSQL', () => {
       canonicalUrl: 'https://public.example/articles/1',
       externalId: 'fixture-1',
       status: 'NORMALIZED',
+      country: 'Bangladesh',
+      region: 'South Asia',
+      category: 'NEWS',
     });
     expect(
       await db.sourceCollectionRun.count({ where: { sourceId: source.id } }),

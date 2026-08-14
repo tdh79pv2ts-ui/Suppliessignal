@@ -1,6 +1,6 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence POC. The active BSK Fashion experience combines a sourced supply-chain graph, trusted RSS/Atom monitoring, and deterministic article relevance filtering. It answers two questions: “What is our supply chain?” and “What relevant things are happening in the world?”
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence POC. The active BSK Fashion experience combines a sourced supply-chain graph, a graph-derived regional monitoring profile, trusted RSS/Atom monitoring, and deterministic article relevance filtering. It answers two questions: “What is our supply chain?” and “What relevant things are happening in the world?”
 
 ## Architecture
 
@@ -74,7 +74,7 @@ Use a managed PostgreSQL database, set `NODE_ENV=production` plus an explicit `A
 
 ## Phase status
 
-The active POC reuses RSS/Atom evidence and matches SourceArticles directly to explicit customer graph data without Claims, extraction, Events, candidate/identity/review workflows, scoring, alerts, Daily Briefs, or automated decisions. `start:poc-worker` runs the ordered fetch → deduplicate/store → relevance-update cycle every five minutes. Source failures and collection counters are persisted and visible in the dashboard.
+The active POC prioritizes regional sources for China, Myanmar, and Bangladesh, then uses global trade/weather feeds only as fallbacks. It matches SourceArticles directly to explicit customer graph data without Claims, extraction, Events, candidate/identity/review workflows, scoring, alerts, Daily Briefs, or automated decisions. `start:poc-worker` runs the ordered fetch → deduplicate/store → relevance-update cycle every five minutes. Source failures and collection counters are persisted and visible in the dashboard.
 
 The seed also contains a [BSK Fashion public-data workspace](docs/bsk-fashion-poc.md) with four published facilities, public product categories, and public material names. Unknown suppliers, routes, ports, and graph relationships are intentionally left empty.
 

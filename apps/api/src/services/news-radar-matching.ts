@@ -105,7 +105,7 @@ function pushUnique(matches: NewsRadarMatch[], match: NewsRadarMatch) {
 }
 
 export function matchArticleToSupplyChain(
-  article: { title: string; excerpt?: string | null; normalizedText?: string | null },
+  article: { title: string; excerpt?: string | null; normalizedText?: string | null; country?: string | null; region?: string | null },
   graph: NewsRadarGraph,
 ): { topics: NewsRadarTopic[]; matches: NewsRadarMatch[]; detectedTerms: string[]; detectedLocations: string[] } {
   const text = normalizeRadarText([article.title, article.excerpt, article.normalizedText].filter(Boolean).join(' '));
@@ -151,7 +151,7 @@ export function matchArticleToSupplyChain(
   for (const factory of graph.factories) {
     const named = containsPhrase(text, factory.name) && factoryNameCounts.get(normalizeRadarText(factory.name)) === 1;
     const cityCountry = containsPhrase(text, factory.city) && containsPhrase(text, factory.country);
-    const countryOnly = !cityCountry && containsPhrase(text, factory.country);
+    const countryOnly = !cityCountry && (containsPhrase(text, factory.country) || article.country === factory.country);
     if (!named && !cityCountry && !countryOnly) continue;
     const method: NewsRadarMatchMethod = named ? 'UNIQUE_EXACT_NAME' : cityCountry ? 'EXACT_CITY_COUNTRY' : 'EXACT_COUNTRY';
     const terms = named ? [factory.name] : [factory.city, factory.country].filter(Boolean) as string[];
@@ -163,7 +163,7 @@ export function matchArticleToSupplyChain(
       matchKey: `factory:${factory.id}`,
       entityType: 'FACTORY', topic, matchMethod: method,
       confidence: named ? 0.92 : cityCountry ? 0.78 : 0.64,
-      reason: named ? 'Factory name occurs exactly in disruptive coverage.' : `Disruptive factory coverage names ${cityCountry ? 'the exact city and country' : 'the factory country'}.`,
+      reason: named ? 'Factory name occurs exactly in disruptive coverage.' : cityCountry ? 'Disruptive factory coverage names the exact city and country.' : article.country === factory.country ? `The regional source covers ${factory.country}, where this verified factory is located.` : 'Disruptive coverage names the factory country.',
       matchedTerms: terms, pathSnapshot: path, factoryId: factory.id,
     });
   }

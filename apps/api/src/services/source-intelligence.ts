@@ -329,7 +329,7 @@ export class SourceIntelligenceService {
     }
   }
   private async persistItem(
-    source: Pick<Source, 'id' | 'baseUrl' | 'language'>,
+    source: Pick<Source, 'id' | 'baseUrl' | 'language' | 'country' | 'region' | 'category'>,
     item: CollectedItem,
   ) {
     const normalizedText = normalizeText(item.rawText ?? item.excerpt);
@@ -360,6 +360,9 @@ export class SourceIntelligenceService {
           author: item.author,
           publishedAt: item.publishedAt,
           language: item.language ?? source.language,
+          country: source.country,
+          region: source.region,
+          category: source.category,
           rawText: item.rawText,
           normalizedText: normalizedText || null,
           excerpt: item.excerpt,

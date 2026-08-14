@@ -46,6 +46,7 @@ enum SourceType {
 
 enum SourceCategory {
   NEWS
+  LOCAL_NEWS
   GOVERNMENT
   REGULATOR
   INDUSTRY
@@ -54,6 +55,8 @@ enum SourceCategory {
   LABOUR
   TRADE
   WEATHER
+  MARKET
+  SUPPLIER
   OTHER
 }
 
@@ -901,6 +904,7 @@ model Source {
   feedUrl                    String?               @map("feed_url")
   country                    String?
   region                     String?
+  industry                   String?
   language                   String?
   category                   SourceCategory
   reliability                SourceReliability
@@ -934,6 +938,9 @@ model SourceArticle {
   discoveredAt          DateTime                    @default(now()) @map("discovered_at")
   collectedAt           DateTime                    @default(now()) @map("collected_at")
   language              String?
+  country               String?
+  region                String?
+  category              SourceCategory?
   rawText               String?                     @map("raw_text")
   normalizedText        String?                     @map("normalized_text")
   excerpt               String?

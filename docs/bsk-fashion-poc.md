@@ -28,11 +28,21 @@ The schema requires criticality and material-substitutability values. The seed t
 
 These URLs describe the customer master data. They are not treated as external disruption news.
 
-## Sources and relevance
+## Regional monitoring profile
 
-Two enabled primary/public feeds provide real external articles: USGS Significant Earthquakes (Atom) and World Trade Organization News (RSS). Their original article URLs and source metadata are retained. Six additional public organizations are registered as reference sources but remain collection-disabled because no supported, verified RSS/Atom configuration is available.
+The monitoring profile is generated from the customer graph, never from invented dependencies. Its initial country coverage is China, Myanmar, and Bangladesh, with Greater China/East Asia, Southeast Asia, and South Asia as derived regional groupings. Industries and monitoring keywords come from the stored BSK company, facility, product, material, and location records.
 
-The deterministic relevance vocabulary includes the four facility names and their countries/cities, the six product categories, and the five published materials. The customer article view shows only articles matching explicit BSK graph terms. It does not create Claims, Events, exposure conclusions, or scores.
+Five enabled feeds provide real external articles:
+
+- South China Morning Post — China RSS: <https://www.scmp.com/rss/4/feed>
+- The Daily Star — Business RSS: <https://www.thedailystar.net/business/rss.xml>
+- Myanmar Ministry of Commerce, Trade Training Institute RSS: <https://tti.commerce.gov.mm/rss.xml>
+- USGS Significant Earthquakes Atom: <https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom>
+- World Trade Organization News RSS: <https://www.wto.org/library/rss/latest_news_e.xml>
+
+The first three are country/regional sources. USGS and WTO remain lower-priority global fallbacks. Original article URLs and source metadata are retained. Six additional authoritative organizations are registered as country-specific recommendations but remain collection-disabled because no supported, verified RSS/Atom configuration is available.
+
+The deterministic relevance vocabulary includes the four facility names and their countries/cities, the six product categories, and the five published materials. A disruptive item from a country-specific source may use that verified source country as location context. The customer article view still shows only articles that match explicit BSK graph data; it does not create Claims, Events, exposure conclusions, or scores.
 
 The dedicated POC worker runs every five minutes. Each cycle collects due enabled feeds, lets the existing URL/content hashes reject duplicates, persists source status/errors, and only then refreshes article relevance. No synthetic articles are seeded; the first successful worker cycle supplies real articles.
 

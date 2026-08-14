@@ -3,6 +3,7 @@ import { z } from 'zod';
 export const sourceTypes = ['RSS', 'ATOM', 'API', 'WEB', 'MANUAL'] as const;
 export const sourceCategories = [
   'NEWS',
+  'LOCAL_NEWS',
   'GOVERNMENT',
   'REGULATOR',
   'INDUSTRY',
@@ -11,6 +12,8 @@ export const sourceCategories = [
   'LABOUR',
   'TRADE',
   'WEATHER',
+  'MARKET',
+  'SUPPLIER',
   'OTHER',
 ] as const;
 export const sourceReliabilities = [
@@ -45,6 +48,7 @@ const sourceFieldsSchema = z.object({
   feedUrl: webUrl.nullable().optional(),
   country: optionalText,
   region: optionalText,
+  industry: optionalText,
   language: z
     .string()
     .regex(/^[a-z]{2,3}(-[A-Z]{2})?$/)

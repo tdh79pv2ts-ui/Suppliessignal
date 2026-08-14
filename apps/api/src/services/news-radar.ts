@@ -3,6 +3,7 @@ import { Prisma, db, type NewsRadarTopic } from '@suppliesignal/db';
 import type { NewsRadarListInput } from '@suppliesignal/shared';
 import { ServiceError } from './errors.js';
 import { sourceHealth } from './source-intelligence.js';
+import { buildRegionalProfile, sourceRecommendation } from './regional-source-profile.js';
 import {
   matchArticleToSupplyChain,
   type NewsRadarGraph,
@@ -46,8 +47,14 @@ function matchData(customerId: string, articleId: string, match: NewsRadarMatch)
 export class NewsRadarService {
   async monitoringProfile(customerId: string) {
     const graph = await this.graph(customerId);
+    const [companies, locations, sources] = await Promise.all([
+      db.company.findMany({ where: { customerId, active: true } }),
+      db.location.findMany({ where: { customerId, active: true } }),
+      db.source.findMany({ where: { active: true } }),
+    ]);
+    const profile = buildRegionalProfile({ customerId, companies, locations, ...graph });
     return {
-      customerId,
+      ...profile,
       generatedAt: new Date(),
       terms: {
         suppliers: graph.suppliers.flatMap((item) => [item.name, item.legalName].filter((value): value is string => Boolean(value))),
@@ -58,11 +65,16 @@ export class NewsRadarService {
         ports: graph.routes.flatMap((item) => item.routePorts?.flatMap((routePort) => [routePort.port.name, routePort.port.portCode].filter((value): value is string => Boolean(value))) ?? []),
         countries: [...new Set([...graph.suppliers.map((item) => item.country), ...graph.factories.map((item) => item.country), ...graph.routes.flatMap((item) => item.routePorts?.map((routePort) => routePort.port.country) ?? [])].filter((value): value is string => Boolean(value)))].sort(),
       },
+      sourceRecommendations: sources
+        .map((source) => ({ source, recommendation: sourceRecommendation(profile, source) }))
+        .filter((item): item is typeof item & { recommendation: NonNullable<typeof item.recommendation> } => Boolean(item.recommendation))
+        .sort((a, b) => a.recommendation.priority - b.recommendation.priority || a.source.name.localeCompare(b.source.name))
+        .map(({ source, recommendation }) => ({ sourceId: source.id, name: source.name, ...recommendation })),
     };
   }
 
   async dashboard(customerId: string) {
-    const [graph, matches, articleCount, articlesToday, latestRun, sources, recentRuns] = await Promise.all([
+    const [graph, matches, articleCount, articlesToday, latestRun, allSources, recentRuns, companies, locations] = await Promise.all([
       this.graph(customerId),
       db.newsRadarExposure.findMany({ where: { customerId }, include: exposureInclude, orderBy: { sourceArticle: { discoveredAt: 'desc' } }, take: 100 }),
       db.newsRadarExposure.findMany({ where: { customerId }, distinct: ['sourceArticleId'], select: { sourceArticleId: true } }),
@@ -71,9 +83,16 @@ export class NewsRadarService {
         distinct: ['sourceArticleId'], select: { sourceArticleId: true },
       }),
       db.sourceCollectionRun.findFirst({ orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
-      db.source.findMany({ where: { active: true }, include: { collectionRuns: { take: 1, orderBy: { startedAt: 'desc' } } }, orderBy: { name: 'asc' } }),
+      db.source.findMany({ where: { active: true }, include: { collectionRuns: { take: 1, orderBy: { startedAt: 'desc' } }, _count: { select: { articles: true } } }, orderBy: { name: 'asc' } }),
       db.sourceCollectionRun.findMany({ take: 8, orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
+      db.company.findMany({ where: { customerId, active: true } }),
+      db.location.findMany({ where: { customerId, active: true } }),
     ]);
+    const monitoringProfile = buildRegionalProfile({ customerId, companies, locations, ...graph });
+    const sources = allSources
+      .map((source) => ({ source, recommendation: sourceRecommendation(monitoringProfile, source) }))
+      .filter((item): item is typeof item & { recommendation: NonNullable<typeof item.recommendation> } => Boolean(item.recommendation))
+      .sort((a, b) => a.recommendation.priority - b.recommendation.priority || a.source.name.localeCompare(b.source.name));
     const relevantArticles = groupRelevantArticles(matches);
     return {
       customer: graph.customer,
@@ -88,7 +107,8 @@ export class NewsRadarService {
         relevantArticles: articleCount.length,
       },
       latestCollection: latestRun,
-      sources: sources.map((source) => ({ id: source.id, name: source.name, type: source.sourceType, url: source.feedUrl ?? source.baseUrl, category: source.category, lastChecked: source.lastCollectedAt, status: sourceHealth(source), lastRun: source.collectionRuns[0] ?? null })),
+      monitoringProfile,
+      sources: sources.map(({ source, recommendation }) => ({ id: source.id, name: source.name, type: source.sourceType, url: source.feedUrl ?? source.baseUrl, country: source.country, region: source.region, industry: source.industry, category: source.category, language: source.language, lastChecked: source.lastCollectedAt, lastSuccessfulSync: source.lastSuccessfulCollectionAt, status: sourceHealth(source), articleCount: source._count.articles, recommendation, lastRun: source.collectionRuns[0] ?? null })),
       recentUpdates: recentRuns,
       articles: relevantArticles,
     };
@@ -149,7 +169,7 @@ export class NewsRadarService {
       throw new ServiceError(state?.status === 'COMPLETED' ? 'NEWS_RADAR_ALREADY_PROCESSED' : 'NEWS_RADAR_ALREADY_RUNNING', 'Article radar processing is already complete or active', 409);
     }
     try {
-      const article = await db.sourceArticle.findUnique({ where: { id: articleId } });
+      const article = await db.sourceArticle.findUnique({ where: { id: articleId }, include: { source: true } });
       if (!article) throw new ServiceError('ARTICLE_NOT_FOUND', 'Source article not found', 404);
       const customers = await db.customer.findMany({ select: { id: true } });
       const topics = new Set<NewsRadarTopic>();
@@ -157,7 +177,7 @@ export class NewsRadarService {
       const locations = new Set<string>();
       let exposuresCreated = 0;
       for (const customer of customers) {
-        const result = matchArticleToSupplyChain(article, await this.graph(customer.id));
+        const result = matchArticleToSupplyChain({ ...article, country: article.country ?? article.source.country, region: article.region ?? article.source.region }, await this.graph(customer.id));
         result.topics.forEach((value) => topics.add(value));
         result.detectedTerms.forEach((value) => terms.add(value));
         result.detectedLocations.forEach((value) => locations.add(value));
@@ -218,16 +238,19 @@ export class NewsRadarService {
 
 type ExposureRow = Prisma.NewsRadarExposureGetPayload<{ include: typeof exposureInclude }>;
 function groupRelevantArticles(rows: ExposureRow[]) {
-  const grouped = new Map<string, { id: string; title: string; summary: string | null; url: string; publishedAt: Date | null; discoveredAt: Date; category: string; source: { name: string; status: string }; relatedSuppliers: string[]; relatedFactories: string[]; relatedProducts: string[]; relatedMaterials: string[]; reasons: string[] }>();
+  const grouped = new Map<string, { id: string; title: string; summary: string | null; url: string; publishedAt: Date | null; discoveredAt: Date; category: string; country: string | null; region: string | null; language: string | null; source: { name: string; status: string }; relatedSuppliers: string[]; relatedFactories: string[]; relatedProducts: string[]; relatedMaterials: string[]; relatedCountries: string[]; relatedLocations: string[]; reasons: string[] }>();
   for (const row of rows) {
     const existing = grouped.get(row.sourceArticleId) ?? {
       id: row.sourceArticle.id, title: row.sourceArticle.title, summary: row.sourceArticle.excerpt ?? row.sourceArticle.normalizedText?.slice(0, 500) ?? null,
       url: row.sourceArticle.originalUrl, publishedAt: row.sourceArticle.publishedAt, discoveredAt: row.sourceArticle.discoveredAt,
       category: row.sourceArticle.source.category, source: { name: row.sourceArticle.source.name, status: row.sourceArticle.status },
-      relatedSuppliers: [], relatedFactories: [], relatedProducts: [], relatedMaterials: [], reasons: [],
+      country: row.sourceArticle.country ?? row.sourceArticle.source.country, region: row.sourceArticle.region ?? row.sourceArticle.source.region, language: row.sourceArticle.language,
+      relatedSuppliers: [], relatedFactories: [], relatedProducts: [], relatedMaterials: [], relatedCountries: [], relatedLocations: [], reasons: [],
     };
     if (row.supplier && !existing.relatedSuppliers.includes(row.supplier.name)) existing.relatedSuppliers.push(row.supplier.name);
     if (row.factory && !existing.relatedFactories.includes(row.factory.name)) existing.relatedFactories.push(row.factory.name);
+    if (row.factory?.country && !existing.relatedCountries.includes(row.factory.country)) existing.relatedCountries.push(row.factory.country);
+    if (row.factory?.city && !existing.relatedLocations.includes(row.factory.city)) existing.relatedLocations.push(row.factory.city);
     if (row.product && !existing.relatedProducts.includes(row.product.name)) existing.relatedProducts.push(row.product.name);
     if (row.material && !existing.relatedMaterials.includes(row.material.name)) existing.relatedMaterials.push(row.material.name);
     if (!existing.reasons.includes(row.reason)) existing.reasons.push(row.reason);

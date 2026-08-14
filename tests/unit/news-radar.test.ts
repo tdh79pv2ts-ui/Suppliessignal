@@ -33,6 +33,16 @@ describe('deterministic supply-chain news radar matching', () => {
     expect(match('Flooding disrupts factories in Vietnam')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY' })]));
   });
 
+  it('uses a regional source country as deterministic location context', () => {
+    const result = matchArticleToSupplyChain(
+      { title: 'Flooding disrupts industrial production', country: 'Vietnam', region: 'Southeast Asia' },
+      graph(),
+    ).matches;
+    expect(result).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'FACTORY', factoryId: 'factory-a', matchMethod: 'EXACT_COUNTRY' }),
+    ]));
+  });
+
   it('matches a real-feed-shaped earthquake magnitude to an exact country dependency', () => {
     const result = match('M 6.2 - 45 km south of Santiago, Chile', graph({
       factories: [{ id: 'factory-chile', name: 'Chile Materials Plant', country: 'Chile', city: 'Valparaiso' }],
