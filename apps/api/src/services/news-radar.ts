@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import { Prisma, db, type NewsRadarTopic } from '@suppliesignal/db';
 import type { NewsRadarListInput } from '@suppliesignal/shared';
 import { ServiceError } from './errors.js';
+import { sourceHealth } from './source-intelligence.js';
 import {
   matchArticleToSupplyChain,
   type NewsRadarGraph,
@@ -61,21 +62,19 @@ export class NewsRadarService {
   }
 
   async dashboard(customerId: string) {
-    const [graph, exposures, exposureCount, articlesToday, latestRun, latestBrief] = await Promise.all([
+    const [graph, matches, articleCount, articlesToday, latestRun, sources, recentRuns] = await Promise.all([
       this.graph(customerId),
-      db.newsRadarExposure.findMany({ where: { customerId }, include: exposureInclude, orderBy: { createdAt: 'desc' }, take: 10 }),
-      db.newsRadarExposure.count({ where: { customerId } }),
+      db.newsRadarExposure.findMany({ where: { customerId }, include: exposureInclude, orderBy: { sourceArticle: { discoveredAt: 'desc' } }, take: 100 }),
+      db.newsRadarExposure.findMany({ where: { customerId }, distinct: ['sourceArticleId'], select: { sourceArticleId: true } }),
       db.newsRadarExposure.findMany({
         where: { customerId, sourceArticle: { discoveredAt: { gte: new Date(new Date().setUTCHours(0, 0, 0, 0)) } } },
         distinct: ['sourceArticleId'], select: { sourceArticleId: true },
       }),
       db.sourceCollectionRun.findFirst({ orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
-      db.dailyBrief.findFirst({
-        where: { customerId },
-        orderBy: [{ briefDate: 'desc' }, { generatedAt: 'desc' }],
-        include: { items: { orderBy: { position: 'asc' }, take: 3, include: { exposure: { include: { sourceArticle: { include: { source: true } } } } } } },
-      }),
+      db.source.findMany({ where: { active: true }, include: { collectionRuns: { take: 1, orderBy: { startedAt: 'desc' } } }, orderBy: { name: 'asc' } }),
+      db.sourceCollectionRun.findMany({ take: 8, orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
     ]);
+    const relevantArticles = groupRelevantArticles(matches);
     return {
       customer: graph.customer,
       counts: {
@@ -86,12 +85,18 @@ export class NewsRadarService {
         materials: graph.materials.length,
         routes: graph.routes.length,
         relevantArticlesToday: articlesToday.length,
-        potentialExposures: exposureCount,
+        relevantArticles: articleCount.length,
       },
       latestCollection: latestRun,
-      latestBrief: latestBrief ? { ...latestBrief, graphRevision: latestBrief.graphRevision.toString() } : null,
-      exposures,
+      sources: sources.map((source) => ({ id: source.id, name: source.name, type: source.sourceType, url: source.feedUrl ?? source.baseUrl, category: source.category, lastChecked: source.lastCollectedAt, status: sourceHealth(source), lastRun: source.collectionRuns[0] ?? null })),
+      recentUpdates: recentRuns,
+      articles: relevantArticles,
     };
+  }
+
+  async listRelevantArticles(customerId: string) {
+    const matches = await db.newsRadarExposure.findMany({ where: { customerId }, include: exposureInclude, orderBy: { sourceArticle: { discoveredAt: 'desc' } }, take: 500 });
+    return { items: groupRelevantArticles(matches) };
   }
 
   async listExposures(customerId: string, input: NewsRadarListInput) {
@@ -209,6 +214,26 @@ export class NewsRadarService {
     ]);
     return { customer, suppliers, factories, products, materials, routes };
   }
+}
+
+type ExposureRow = Prisma.NewsRadarExposureGetPayload<{ include: typeof exposureInclude }>;
+function groupRelevantArticles(rows: ExposureRow[]) {
+  const grouped = new Map<string, { id: string; title: string; summary: string | null; url: string; publishedAt: Date | null; discoveredAt: Date; category: string; source: { name: string; status: string }; relatedSuppliers: string[]; relatedFactories: string[]; relatedProducts: string[]; relatedMaterials: string[]; reasons: string[] }>();
+  for (const row of rows) {
+    const existing = grouped.get(row.sourceArticleId) ?? {
+      id: row.sourceArticle.id, title: row.sourceArticle.title, summary: row.sourceArticle.excerpt ?? row.sourceArticle.normalizedText?.slice(0, 500) ?? null,
+      url: row.sourceArticle.originalUrl, publishedAt: row.sourceArticle.publishedAt, discoveredAt: row.sourceArticle.discoveredAt,
+      category: row.sourceArticle.source.category, source: { name: row.sourceArticle.source.name, status: row.sourceArticle.status },
+      relatedSuppliers: [], relatedFactories: [], relatedProducts: [], relatedMaterials: [], reasons: [],
+    };
+    if (row.supplier && !existing.relatedSuppliers.includes(row.supplier.name)) existing.relatedSuppliers.push(row.supplier.name);
+    if (row.factory && !existing.relatedFactories.includes(row.factory.name)) existing.relatedFactories.push(row.factory.name);
+    if (row.product && !existing.relatedProducts.includes(row.product.name)) existing.relatedProducts.push(row.product.name);
+    if (row.material && !existing.relatedMaterials.includes(row.material.name)) existing.relatedMaterials.push(row.material.name);
+    if (!existing.reasons.includes(row.reason)) existing.reasons.push(row.reason);
+    grouped.set(row.sourceArticleId, existing);
+  }
+  return [...grouped.values()].sort((a, b) => (b.publishedAt ?? b.discoveredAt).getTime() - (a.publishedAt ?? a.discoveredAt).getTime());
 }
 
 export const newsRadarService = new NewsRadarService();

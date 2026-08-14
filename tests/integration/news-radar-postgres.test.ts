@@ -42,6 +42,17 @@ describe.sequential('news radar with PostgreSQL', () => {
     expect(await db.newsRadarExposure.count({ where: { sourceArticleId: ids.article, customerId: ids.customerA } })).toBe(1);
   });
 
+  it('returns one customer-scoped relevant article with its original evidence URL', async () => {
+    const result = await service.listRelevantArticles(ids.customerA);
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]).toMatchObject({
+      title: 'Fire disrupts Distinct Components Group production in Vietnam',
+      url: 'https://radar.example.test/fire',
+      relatedSuppliers: ['Distinct Components Group'],
+    });
+    await expect(service.listRelevantArticles(ids.customerB)).resolves.toEqual({ items: [] });
+  });
+
   it('does not generate a scheduled brief for a disabled preference', async () => {
     await briefService.updatePreference(ids.customerA, ids.user, {
       enabled: false,

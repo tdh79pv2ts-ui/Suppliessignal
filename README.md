@@ -1,6 +1,6 @@
 # SupplySignal
 
-SupplySignal is a customer-specific, evidence-first supply-chain intelligence POC. Its active product loop combines an explicit customer supply-chain graph, RSS/Atom monitoring, deterministic article-to-asset matching, explainable potential exposures and an in-app Daily Supply Chain Brief. See [the POC architecture, scope and limitations](docs/supply-chain-intelligence-poc.md).
+SupplySignal is a customer-specific, evidence-first supply-chain intelligence POC. The active BSK Fashion experience combines a sourced supply-chain graph, trusted RSS/Atom monitoring, and deterministic article relevance filtering. It answers two questions: “What is our supply chain?” and “What relevant things are happening in the world?”
 
 ## Architecture
 
@@ -60,6 +60,7 @@ pnpm db:migrate      # apply/create development migrations
 pnpm db:deploy       # apply existing migrations without reset (staging/production)
 pnpm db:seed         # seed demo graph/users and verified real-news source configuration
 pnpm db:verify-migrations # clean and Phase 5 hardening upgrade verification
+pnpm --filter @suppliesignal/api start:poc-worker # five-minute collection + BSK relevance cycle
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
 pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process
 pnpm --filter @suppliesignal/api start:event-worker # eligible Claim event processing
@@ -73,8 +74,8 @@ Use a managed PostgreSQL database, set `NODE_ENV=production` plus an explicit `A
 
 ## Phase status
 
-The active POC reuses RSS/Atom evidence and matches SourceArticles directly to explicit customer graph data without Claims, Events, identity resolution, review workflows, scoring, alerts, or automated decisions. The radar worker also generates due in-app daily briefs for explicitly enabled preferences.
+The active POC reuses RSS/Atom evidence and matches SourceArticles directly to explicit customer graph data without Claims, extraction, Events, candidate/identity/review workflows, scoring, alerts, Daily Briefs, or automated decisions. `start:poc-worker` runs the ordered fetch → deduplicate/store → relevance-update cycle every five minutes. Source failures and collection counters are persisted and visible in the dashboard.
 
 The seed also contains a [BSK Fashion public-data workspace](docs/bsk-fashion-poc.md) with four published facilities, public product categories, and public material names. Unknown suppliers, routes, ports, and graph relationships are intentionally left empty.
 
-Enterprise-phase tables remain in migration history to preserve data, but Claims, extraction, Events, candidate review, identity governance and enterprise exposure routes are not registered in the active POC application.
+Enterprise-phase tables and APIs remain in migration history to preserve existing functionality and data, but they are not exposed in the active POC navigation.

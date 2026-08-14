@@ -21,8 +21,7 @@ import {
   SourceDetailPage,
   SourcesPage,
 } from './pages/SourcePages';
-import { NewsRadarDashboard, NewsRadarExposureDetailPage } from './pages/NewsRadarPages';
-import { DailyBriefPage, NewsletterSettingsPage } from './pages/DailyBriefPage';
+import { PocArticlesPage, PocSourcesPage } from './pages/PocPages';
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -59,7 +58,9 @@ export function App() {
       setCustomerId((current) =>
         available.some((workspace) => workspace.id === current)
           ? current
-          : (available[0]?.id ?? ''),
+          : (available.find((workspace) => workspace.name === 'BSK Fashion')?.id ??
+            available[0]?.id ??
+            ''),
       );
     });
   }, [session]);
@@ -114,9 +115,9 @@ export function App() {
       />
       <Route element={shell}>
         <Route path="/dashboard" element={<DashboardPage />} />
-        <Route path="/news-radar" element={<NewsRadarDashboard />} />
-        <Route path="/news-radar/exposures/:id" element={<NewsRadarExposureDetailPage />} />
-        <Route path="/daily-brief" element={<DailyBriefPage />} />
+        <Route path="/news-radar" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/news-radar/exposures/:id" element={<Navigate to="/articles" replace />} />
+        <Route path="/daily-brief" element={<Navigate to="/dashboard" replace />} />
         <Route path="/supply-chain" element={<SupplyChainOverview />} />
         {entityKinds.flatMap((kind) => [
           <Route
@@ -131,8 +132,10 @@ export function App() {
           />,
         ])}
         <Route path="/supply-chain/ports" element={<PortsPage />} />
+        <Route path="/sources" element={<PocSourcesPage />} />
+        <Route path="/articles" element={<PocArticlesPage />} />
         <Route
-          path="/sources"
+          path="/source-admin"
           element={
             globalIntelligenceAllowed ? (
               <SourcesPage />
@@ -171,7 +174,7 @@ export function App() {
             )
           }
         />
-        <Route path="/settings" element={<NewsletterSettingsPage />} />
+        <Route path="/settings" element={<Navigate to="/dashboard" replace />} />
       </Route>
       <Route
         path="*"

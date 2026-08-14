@@ -22,7 +22,9 @@ function app(role: AuthenticatedUser['role'], memberships = [customerA], authent
 describe('news radar authorization', () => {
   it('allows a customer to read its own radar but not another customer', async () => {
     expect((await request(app('CUSTOMER')).get(`/api/customers/${customerA}/news-radar`)).status).toBe(200);
+    expect((await request(app('CUSTOMER')).get(`/api/customers/${customerA}/relevant-articles`)).status).toBe(200);
     expect((await request(app('CUSTOMER')).get(`/api/customers/${customerB}/news-radar`)).status).toBe(403);
+    expect((await request(app('CUSTOMER')).get(`/api/customers/${customerB}/relevant-articles`)).status).toBe(403);
   });
   it('requires ADMIN to process global articles', async () => {
     expect((await request(app('REVIEWER')).post(`/api/admin/news-radar/articles/${articleId}/process`)).status).toBe(403);

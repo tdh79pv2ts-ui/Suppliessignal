@@ -12,6 +12,7 @@
     "start:event-worker": "node dist/apps/api/src/event-worker.js",
     "start:exposure-worker": "node dist/apps/api/src/exposure-worker.js",
     "start:news-radar-worker": "node dist/apps/api/src/news-radar-worker.js",
+    "start:poc-worker": "node dist/apps/api/src/poc-worker.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src"
   },

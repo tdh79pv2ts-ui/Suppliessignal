@@ -119,6 +119,7 @@ async function main() {
   const bskCustomer = await prisma.customer.upsert({ where: { id: 'b5000000-0000-4000-8000-000000000001' }, update: { name: 'BSK Fashion', description: 'Public-data POC for BSK Fashion bag and accessories manufacturing.' }, create: { id: 'b5000000-0000-4000-8000-000000000001', name: 'BSK Fashion', description: 'Public-data POC for BSK Fashion bag and accessories manufacturing.' } });
   await prisma.customerMembership.upsert({ where: { userId_customerId: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: bskCustomer.id } }, update: {}, create: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: bskCustomer.id } });
   const bskSource = { sourceName: 'BSK Fashion official website', sourceUrl: 'https://bskfashion.com/facilities', verifiedAt };
+  await prisma.company.upsert({ where: { id: 'b5050000-0000-4000-8000-000000000001' }, update: { customerId: bskCustomer.id, name: 'BSK Fashion', category: 'Bag and accessories manufacturer', country: 'China', sourceName: 'BSK Fashion company history', sourceUrl: 'https://bskfashion.com/about', verifiedAt, active: true }, create: { id: 'b5050000-0000-4000-8000-000000000001', customerId: bskCustomer.id, name: 'BSK Fashion', category: 'Bag and accessories manufacturer', country: 'China', sourceName: 'BSK Fashion company history', sourceUrl: 'https://bskfashion.com/about', verifiedAt } });
   const bskFactories = [
     ['b5100000-0000-4000-8000-000000000001', 'Guangzhou Bisakai Leather Co., Ltd', 'China', 'Guangzhou', 'Shiling Town, Huadu District, Guangzhou'],
     ['b5100000-0000-4000-8000-000000000002', 'Welcombine Co., Ltd', 'Myanmar', 'Yangon', 'Yangon, Myanmar'],
@@ -129,6 +130,29 @@ async function main() {
   const bskProducts = [['b5200000-0000-4000-8000-000000000001', 'Handbag'], ['b5200000-0000-4000-8000-000000000002', 'Backpack'], ['b5200000-0000-4000-8000-000000000003', 'Travel Bag'], ['b5200000-0000-4000-8000-000000000004', 'Crossbody Bag'], ['b5200000-0000-4000-8000-000000000005', 'Cosmetic Bag'], ['b5200000-0000-4000-8000-000000000006', 'Wallet']] as const;
   for (const [id, name] of bskProducts) await prisma.product.upsert({ where: { id }, update: { customerId: bskCustomer.id, name, category: 'Bags and accessories', sourceName: 'BSK Fashion product catalog', sourceUrl: 'https://bskfashion.com/products', verifiedAt, active: true }, create: { id, customerId: bskCustomer.id, name, category: 'Bags and accessories', criticality: 'MEDIUM', sourceName: 'BSK Fashion product catalog', sourceUrl: 'https://bskfashion.com/products', verifiedAt } });
   for (const productId of [bskProducts[0][0], bskProducts[1][0]]) await prisma.factoryProduct.upsert({ where: { factoryId_productId: { factoryId: bskFactories[1][0], productId } }, update: { customerId: bskCustomer.id, sourceName: bskSource.sourceName, sourceUrl: bskSource.sourceUrl, collectedAt: verifiedAt, confidence: 1 }, create: { customerId: bskCustomer.id, factoryId: bskFactories[1][0], productId, sourceName: bskSource.sourceName, sourceUrl: bskSource.sourceUrl, collectedAt: verifiedAt, confidence: 1 } });
+  const bskMaterialSource = { sourceName: 'BSK Fashion product catalog', sourceUrl: 'https://bskfashion.com/products', verifiedAt };
+  for (const [index, name] of ['Faux leather', 'Nylon', 'Polyester', 'PU', 'Semi PU'].entries()) {
+    const id = `b53${String(index + 1).padStart(5, '0')}-0000-4000-8000-000000000001`;
+    await prisma.material.upsert({ where: { id }, update: { customerId: bskCustomer.id, name, category: 'Published catalog material', commodity: name, criticality: 'MEDIUM', substitutable: false, ...bskMaterialSource, active: true }, create: { id, customerId: bskCustomer.id, name, category: 'Published catalog material', commodity: name, criticality: 'MEDIUM', substitutable: false, ...bskMaterialSource } });
+  }
+  const bskCountries = [
+    ['b5400000-0000-4000-8000-000000000001', 'China', 'CN'],
+    ['b5400000-0000-4000-8000-000000000002', 'Myanmar', 'MM'],
+    ['b5400000-0000-4000-8000-000000000003', 'Bangladesh', 'BD'],
+  ] as const;
+  for (const [id, name, iso2] of bskCountries) await prisma.country.upsert({ where: { iso2 }, update: { name, sourceName: 'ISO 3166 country reference', sourceUrl: 'https://www.iso.org/iso-3166-country-codes.html', verifiedAt }, create: { id, name, iso2, sourceName: 'ISO 3166 country reference', sourceUrl: 'https://www.iso.org/iso-3166-country-codes.html', verifiedAt } });
+  const persistedBskCountries = await prisma.country.findMany({ where: { iso2: { in: bskCountries.map((country) => country[2]) } } });
+  const bskLocations = [
+    ['b5500000-0000-4000-8000-000000000001', 'Guangzhou, China', 'China', 'CN', 'Guangzhou', bskFactories[0][0]],
+    ['b5500000-0000-4000-8000-000000000002', 'Yangon, Myanmar', 'Myanmar', 'MM', 'Yangon', bskFactories[1][0]],
+    ['b5500000-0000-4000-8000-000000000003', 'Yangon, Myanmar — YLX', 'Myanmar', 'MM', 'Yangon', bskFactories[2][0]],
+    ['b5500000-0000-4000-8000-000000000004', 'Cumilla EPZ, Bangladesh', 'Bangladesh', 'BD', 'Cumilla EPZ', bskFactories[3][0]],
+  ] as const;
+  for (const [id, name, country, iso2, location, factoryId] of bskLocations) {
+    const countryId = persistedBskCountries.find((entry) => entry.iso2 === iso2)!.id;
+    await prisma.location.upsert({ where: { id }, update: { customerId: bskCustomer.id, countryId, name, country, location, category: 'Published production location', ...bskSource, active: true }, create: { id, customerId: bskCustomer.id, countryId, name, country, location, category: 'Published production location', ...bskSource } });
+    await prisma.factoryLocation.upsert({ where: { factoryId_locationId: { factoryId, locationId: id } }, update: { customerId: bskCustomer.id, sourceName: bskSource.sourceName, sourceUrl: bskSource.sourceUrl, collectedAt: verifiedAt, confidence: 1 }, create: { customerId: bskCustomer.id, factoryId, locationId: id, sourceName: bskSource.sourceName, sourceUrl: bskSource.sourceUrl, collectedAt: verifiedAt, confidence: 1 } });
+  }
 
   const sources = [
     ['BGMEA', 'https://www.bgmea.com.bd/', 'Bangladesh', 'INDUSTRY', 'MEDIUM'],
@@ -143,7 +167,7 @@ async function main() {
     { id: 'a1000000-0000-4000-8000-000000000001', name: 'USGS Significant Earthquakes', sourceType: 'ATOM' as const, baseUrl: 'https://earthquake.usgs.gov/', feedUrl: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom', category: 'WEATHER' as const },
     { id: 'a1000000-0000-4000-8000-000000000002', name: 'World Trade Organization News', sourceType: 'RSS' as const, baseUrl: 'https://www.wto.org/', feedUrl: 'https://www.wto.org/library/rss/latest_news_e.xml', category: 'TRADE' as const },
   ];
-  for (const source of realNewsSources) await prisma.source.upsert({ where: { id: source.id }, update: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 15 }, create: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 15 } });
+  for (const source of realNewsSources) await prisma.source.upsert({ where: { id: source.id }, update: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 5 }, create: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 5 } });
   await prisma.newsletterPreference.upsert({ where: { userId_customerId: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id } }, update: {}, create: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id, enabled: false, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'customer@demo.suppliesignal.local' } });
 }
 

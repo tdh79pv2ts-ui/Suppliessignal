@@ -41,6 +41,10 @@ export function createNewsRadarRouter(
     const params = parse(customerParamsSchema, request.params, response);
     if (params) response.json({ data: await service.monitoringProfile(params.customerId) });
   }));
+  router.get('/customers/:customerId/relevant-articles', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    if (params) response.json({ data: await service.listRelevantArticles(params.customerId) });
+  }));
   router.get('/customers/:customerId/news-radar/exposures', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
     const query = parse<NewsRadarListInput>(newsRadarListSchema, request.query, response);

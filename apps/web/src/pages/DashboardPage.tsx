@@ -1,3 +1,3 @@
-import { NewsRadarDashboard } from './NewsRadarPages';
+import { PocDashboardPage } from './PocPages';
 
-export function DashboardPage() { return <NewsRadarDashboard />; }
+export function DashboardPage() { return <PocDashboardPage />; }

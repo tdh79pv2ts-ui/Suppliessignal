@@ -1,13 +1,10 @@
 import {
   Activity,
   Boxes,
-  FileCheck2,
   LayoutDashboard,
   LogOut,
   RadioTower,
-  Settings,
   ShieldCheck,
-  CalendarDays,
   Newspaper,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
@@ -17,23 +14,14 @@ import { useWorkspace } from '../lib/workspace';
 const baseNavigation = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
   { label: 'Supply chain', to: '/supply-chain', icon: Boxes },
-  { label: 'News radar', to: '/news-radar', icon: Newspaper },
-  { label: 'Daily brief', to: '/daily-brief', icon: CalendarDays },
-  { label: 'Settings', to: '/settings', icon: Settings },
+  { label: 'Sources', to: '/sources', icon: RadioTower },
+  { label: 'Articles', to: '/articles', icon: Newspaper },
 ];
 
 export function AppShell() {
   const isStaging = import.meta.env.VITE_APP_ENV === 'staging';
-  const { customerId, workspaces, setCustomerId, user } = useWorkspace();
-  const navigation =
-    user.role === 'ADMIN' || user.role === 'REVIEWER'
-      ? [
-          ...baseNavigation.slice(0, 3),
-          { label: 'Sources', to: '/sources', icon: RadioTower },
-          { label: 'Articles', to: '/source-articles', icon: FileCheck2 },
-          ...baseNavigation.slice(3),
-        ]
-      : baseNavigation;
+  const { customerId, workspaces, setCustomerId } = useWorkspace();
+  const navigation = baseNavigation;
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[248px_1fr]">
       <aside className="border-b bg-ink text-white lg:min-h-screen lg:border-b-0 lg:border-r lg:border-white/10">
