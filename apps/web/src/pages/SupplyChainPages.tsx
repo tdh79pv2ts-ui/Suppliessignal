@@ -21,6 +21,9 @@ type Row = {
   [key: string]: unknown;
 };
 type Graph = {
+  companies: Row[];
+  countries: Row[];
+  locations: Row[];
   suppliers: Row[];
   factories: Row[];
   products: Row[];
@@ -38,6 +41,20 @@ type Field = {
 };
 const criticalities = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'];
 const configs = {
+  companies: {
+    title: 'Companies',
+    singular: 'Company',
+    fields: [
+      { key: 'name', label: 'Name', required: true },
+      { key: 'legalName', label: 'Legal name' },
+      { key: 'country', label: 'Country' },
+      { key: 'location', label: 'Location' },
+      { key: 'category', label: 'Category' },
+      { key: 'sourceName', label: 'Source', required: true },
+      { key: 'sourceUrl', label: 'Source URL', required: true },
+      { key: 'verifiedAt', label: 'Verified at (ISO date)', required: true },
+    ],
+  },
   suppliers: {
     title: 'Suppliers',
     singular: 'Supplier',
@@ -47,6 +64,10 @@ const configs = {
       { key: 'country', label: 'Country', required: true },
       { key: 'city', label: 'City' },
       { key: 'supplierType', label: 'Supplier type' },
+      { key: 'category', label: 'Category' },
+      { key: 'sourceName', label: 'Source' },
+      { key: 'sourceUrl', label: 'Source URL' },
+      { key: 'verifiedAt', label: 'Verified at (ISO date)' },
       {
         key: 'tier',
         label: 'Tier',
@@ -75,6 +96,13 @@ const configs = {
       { key: 'city', label: 'City' },
       { key: 'address', label: 'Address' },
       { key: 'productionType', label: 'Production type' },
+      { key: 'sourceName', label: 'Source' },
+      { key: 'sourceUrl', label: 'Source URL' },
+      { key: 'verifiedAt', label: 'Verified at (ISO date)' },
+      { key: 'supplierRelationSourceName', label: 'Supplier relationship source' },
+      { key: 'supplierRelationSourceUrl', label: 'Supplier relationship source URL' },
+      { key: 'supplierRelationCollectedAt', label: 'Supplier relationship collected at (ISO date)' },
+      { key: 'supplierRelationConfidence', label: 'Supplier relationship confidence', kind: 'number' },
       {
         key: 'criticality',
         label: 'Criticality',
@@ -94,6 +122,9 @@ const configs = {
       { key: 'sku', label: 'SKU' },
       { key: 'category', label: 'Category' },
       { key: 'description', label: 'Description' },
+      { key: 'sourceName', label: 'Source' },
+      { key: 'sourceUrl', label: 'Source URL' },
+      { key: 'verifiedAt', label: 'Verified at (ISO date)' },
       {
         key: 'criticality',
         label: 'Criticality',
@@ -110,6 +141,9 @@ const configs = {
       { key: 'name', label: 'Name', required: true },
       { key: 'category', label: 'Category' },
       { key: 'commodity', label: 'Commodity' },
+      { key: 'sourceName', label: 'Source' },
+      { key: 'sourceUrl', label: 'Source URL' },
+      { key: 'verifiedAt', label: 'Verified at (ISO date)' },
       {
         key: 'criticality',
         label: 'Criticality',
@@ -127,6 +161,9 @@ const configs = {
       { key: 'name', label: 'Name', required: true },
       { key: 'originLabel', label: 'Origin', required: true },
       { key: 'destinationLabel', label: 'Destination', required: true },
+      { key: 'sourceName', label: 'Source' },
+      { key: 'sourceUrl', label: 'Source URL' },
+      { key: 'verifiedAt', label: 'Verified at (ISO date)' },
       {
         key: 'transportMode',
         label: 'Transport mode',
@@ -177,11 +214,11 @@ export function SupplyChainOverview() {
   }, [customerId]);
   const metrics = graph
     ? [
+        ['Companies', graph.companies.length],
         ['Suppliers', graph.suppliers.length],
         ['Factories', graph.factories.length],
-        ['Products', graph.products.length],
+        ['Countries', graph.countries.length],
         ['Materials', graph.materials.length],
-        ['Routes', graph.routes.length],
         ['Relevant ports', graph.ports.length],
       ]
     : [];
@@ -207,6 +244,7 @@ export function SupplyChainOverview() {
               </div>
             ))}
           </div>
+          <EvidenceExplorer graph={graph} />
           <div className="mt-7 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {Object.entries(configs).map(([kind, config]) => (
               <Link
@@ -322,7 +360,7 @@ export function EntityListPage({ kind }: { kind: EntityKind }) {
     load(next);
   }
   const scopedFilter =
-    kind === 'suppliers' || kind === 'factories'
+    kind === 'companies' || kind === 'suppliers' || kind === 'factories'
       ? { key: 'country', label: 'Country' }
       : kind === 'products' || kind === 'materials'
         ? { key: 'category', label: 'Category' }
@@ -485,7 +523,7 @@ export function EntityListPage({ kind }: { kind: EntityKind }) {
                       </Link>
                     </td>
                     <td className="px-4 py-3">
-                      {String(item.criticality ?? '—')}
+                      {String(item.criticality ?? item.category ?? '—')}
                     </td>
                     <td className="px-4 py-3">
                       {item.active ? 'Active' : 'Archived'}
@@ -612,8 +650,11 @@ export function PortsPage() {
     { key: 'city', label: 'City' },
     { key: 'latitude', label: 'Latitude', kind: 'number' },
     { key: 'longitude', label: 'Longitude', kind: 'number' },
+    { key: 'sourceName', label: 'Source' },
+    { key: 'sourceUrl', label: 'Source URL' },
+    { key: 'verifiedAt', label: 'Verified at (ISO date)' },
   ];
-  const createFields: Field[] = [...fields, { key: 'routeId', label: 'Customer route', kind: 'route', required: true }, { key: 'sequence', label: 'Route sequence', kind: 'number', required: true }];
+  const createFields: Field[] = [...fields.map((field) => ['sourceName', 'sourceUrl', 'verifiedAt'].includes(field.key) ? { ...field, required: true } : field), { key: 'routeId', label: 'Customer route', kind: 'route', required: true }, { key: 'sequence', label: 'Route sequence', kind: 'number', required: true }, { key: 'collectedAt', label: 'Relationship collected at (ISO date)', required: true }, { key: 'confidence', label: 'Relationship confidence', kind: 'number', required: true }];
   const load = () =>
     void Promise.all([
       apiRequest<{ items: Row[] }>(`/customers/${customerId}/ports?active=all&pageSize=100`),
@@ -734,7 +775,9 @@ function RelationshipPanel({
 }) {
   const relations = useMemo(
     () =>
-      kind === 'suppliers'
+      kind === 'companies'
+        ? []
+        : kind === 'suppliers'
         ? [
             {
               label: 'Products',
@@ -785,14 +828,14 @@ function RelationshipPanel({
               : [],
     [graph, item, kind],
   );
-  async function attach(path: string, targetId: string, count: number) {
+  async function attach(path: string, targetId: string, count: number, provenance: RelationshipEvidence) {
     try {
       await apiRequest(`/customers/${customerId}/${kind}/${item.id}/${path}`, {
         method: 'POST',
         body: JSON.stringify(
           path === 'ports'
-            ? { portId: targetId, sequence: count + 1 }
-            : { targetId },
+            ? { portId: targetId, sequence: count + 1, ...provenance }
+            : { targetId, ...provenance },
         ),
       });
       reload();
@@ -837,7 +880,9 @@ function RelationshipPanel({
     }
   }
   const readOnly =
-    kind === 'products'
+    kind === 'companies'
+      ? [{ label: 'Publicly disclosed suppliers', items: relationItems(item.companySuppliers, 'supplier') }]
+      : kind === 'products'
       ? [
           {
             label: 'Suppliers',
@@ -890,8 +935,8 @@ function RelationshipPanel({
         <RelationEditor
           key={relation.label}
           {...relation}
-          onAttach={(id) =>
-            void attach(relation.path, id, relation.current.length)
+          onAttach={(id, provenance) =>
+            void attach(relation.path, id, relation.current.length, provenance)
           }
           onDetach={(id) => void detach(relation.path, id)}
           onMove={
@@ -920,6 +965,50 @@ function RelationshipPanel({
     </section>
   );
 }
+
+function EvidenceExplorer({ graph }: { graph: Graph }) {
+  const companySuppliers = graph.relationships.companySuppliers ?? [];
+  const factoryLocations = graph.relationships.factoryLocations ?? [];
+  const productMaterials = graph.relationships.productMaterials ?? [];
+  const suppliersFor = (companyId: string) => companySuppliers.filter((edge) => edge.companyId === companyId).map((edge) => ({ edge, node: graph.suppliers.find((supplier) => supplier.id === edge.supplierId) })).filter((entry) => entry.node);
+  return (
+    <section className="mt-7 rounded-xl border bg-white p-5">
+      <h2 className="font-semibold">Evidence-backed graph explorer</h2>
+      <p className="mt-1 text-sm text-muted">Only explicit, cited relationships are shown. Missing links remain unknown.</p>
+      <div className="mt-4 space-y-4">
+        {graph.companies.map((company) => (
+          <div className="rounded-lg border p-4" key={company.id}>
+            <div className="font-semibold">{company.name}</div>
+            <SourceLink row={company} />
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {suppliersFor(company.id).map(({ edge, node }) => (
+                <div className="rounded-lg bg-canvas p-3" key={node!.id}>
+                  <div className="text-sm font-medium">Supplier → {node!.name}</div>
+                  <SourceLink row={edge} />
+                  <div className="mt-2 text-xs text-muted">
+                    Factories: {graph.factories.filter((factory) => factory.supplierId === node!.id).map((factory) => factory.name).join(', ') || 'No verified factory relationship'}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="grid gap-3 md:grid-cols-2">
+          {graph.factories.map((factory) => {
+            const placeEdges = factoryLocations.filter((edge) => edge.factoryId === factory.id);
+            return <div className="rounded-lg border p-3" key={factory.id}><div className="text-sm font-medium">Factory → Location: {factory.name}</div><SourceLink row={factory} /><div className="mt-2 text-xs text-muted">{placeEdges.map((edge) => graph.locations.find((location) => location.id === edge.locationId)?.name).filter(Boolean).join(', ') || 'No verified location edge'}</div></div>;
+          })}
+          {graph.products.map((product) => <div className="rounded-lg border p-3" key={product.id}><div className="text-sm font-medium">Product → Materials: {product.name}</div><SourceLink row={product} /><div className="mt-2 text-xs text-muted">{productMaterials.filter((edge) => edge.productId === product.id).map((edge) => graph.materials.find((material) => material.id === edge.materialId)?.name).filter(Boolean).join(', ') || 'No verified material edge'}</div></div>)}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SourceLink({ row }: { row: Row }) {
+  const url = typeof row.sourceUrl === 'string' ? row.sourceUrl : null;
+  return <div className="mt-1 text-xs text-muted">{url ? <a className="text-signal hover:underline" href={url} target="_blank" rel="noreferrer">{String(row.sourceName ?? 'Source')}</a> : 'Source not recorded'}{row.confidence != null ? ` · confidence ${String(row.confidence)}` : ''}{row.verifiedAt || row.collectedAt ? ` · ${new Date(String(row.verifiedAt ?? row.collectedAt)).toLocaleDateString()}` : ''}</div>;
+}
 function relationItems(value: unknown, key: string): Row[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry) => {
@@ -939,11 +1028,15 @@ function RelationEditor({
   label: string;
   targets: Row[];
   current: Row[];
-  onAttach: (id: string) => void;
+  onAttach: (id: string, provenance: RelationshipEvidence) => void;
   onDetach: (id: string) => void;
   onMove?: ((index: number, direction: -1 | 1) => void) | undefined;
 }) {
   const [selected, setSelected] = useState('');
+  const [sourceName, setSourceName] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [collectedAt, setCollectedAt] = useState(new Date().toISOString().slice(0, 10));
+  const [confidence, setConfidence] = useState('1');
   const available = targets.filter(
     (target) => !current.some((item) => item.id === target.id),
   );
@@ -964,15 +1057,21 @@ function RelationEditor({
           ))}
         </select>
         <button
-          disabled={!selected}
+          disabled={!selected || !sourceName.trim() || !sourceUrl.trim() || !collectedAt}
           className="focus-ring rounded-lg border px-3 text-sm disabled:opacity-40"
           onClick={() => {
-            onAttach(selected);
+            onAttach(selected, { sourceName: sourceName.trim(), sourceUrl: sourceUrl.trim(), collectedAt, confidence: Number(confidence) });
             setSelected('');
           }}
         >
           <Link2 className="h-4 w-4" />
         </button>
+      </div>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        <input className="focus-ring rounded-lg border px-3 py-2 text-xs" aria-label={`${label} source name`} placeholder="Source name" value={sourceName} onChange={(event) => setSourceName(event.target.value)} />
+        <input className="focus-ring rounded-lg border px-3 py-2 text-xs" aria-label={`${label} source URL`} placeholder="https://…" type="url" value={sourceUrl} onChange={(event) => setSourceUrl(event.target.value)} />
+        <input className="focus-ring rounded-lg border px-3 py-2 text-xs" aria-label={`${label} collection date`} type="date" value={collectedAt} onChange={(event) => setCollectedAt(event.target.value)} />
+        <input className="focus-ring rounded-lg border px-3 py-2 text-xs" aria-label={`${label} confidence`} type="number" min="0" max="1" step="0.01" value={confidence} onChange={(event) => setConfidence(event.target.value)} />
       </div>
       <div className="mt-2 space-y-2">
         {current.map((target, index) => (
@@ -1016,6 +1115,7 @@ function RelationEditor({
     </div>
   );
 }
+type RelationshipEvidence = { sourceName: string; sourceUrl: string; collectedAt: string; confidence: number };
 function EntityForm({
   fields,
   initial,

@@ -97,6 +97,7 @@ export function App() {
       <Navigate to="/login" replace />
     );
   const entityKinds: EntityKind[] = [
+    'companies',
     'suppliers',
     'factories',
     'products',

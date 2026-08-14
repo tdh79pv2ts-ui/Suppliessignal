@@ -1,6 +1,6 @@
 import { Prisma, type Criticality, type SupplierTier, type TransportMode } from '@suppliesignal/db';
 import { db } from '@suppliesignal/db';
-import type { FactoryInput, MaterialInput, PortInput, ProductInput, RouteInput, SupplierInput } from '@suppliesignal/shared';
+import type { CompanyInput, FactoryInput, MaterialInput, PortInput, ProductInput, RouteInput, SupplierInput } from '@suppliesignal/shared';
 import { ServiceError } from './errors.js';
 
 export type Filters = { page: number; pageSize: number; active: 'true' | 'false' | 'all'; search?: string | undefined; country?: string | undefined; category?: string | undefined; criticality?: Criticality | undefined; tier?: SupplierTier | undefined; transportMode?: TransportMode | undefined; supplierId?: string | undefined };
@@ -12,6 +12,16 @@ const coordinates = (data: Record<string, unknown>) => compact({ ...data, latitu
 
 export class SupplyChainService {
   listWorkspaces(userId: string, isAdmin: boolean) { return db.customer.findMany({ where: isAdmin ? {} : { memberships: { some: { userId } } }, select: { id: true, name: true }, orderBy: { name: 'asc' } }); }
+  async listCompanies(customerId: string, f: Filters) {
+    const onlyActive = activeFilter(f.active);
+    const where: Prisma.CompanyWhereInput = { customerId, ...(typeof onlyActive === 'boolean' ? { active: onlyActive } : {}), ...(f.country ? { country: f.country } : {}), ...(f.category ? { category: f.category } : {}), ...(f.search ? { name: { contains: f.search, mode: 'insensitive' as const } } : {}) };
+    const [items, total] = await db.$transaction([db.company.findMany({ where, orderBy: { name: 'asc' }, skip: (f.page - 1) * f.pageSize, take: f.pageSize }), db.company.count({ where })]);
+    return { items, pagination: pagination(f.page, f.pageSize, total) };
+  }
+  async getCompany(customerId: string, id: string) { const item = await db.company.findFirst({ where: { id, customerId }, include: { companySuppliers: { include: { supplier: true } } } }); if (!item) throw new ServiceError('COMPANY_NOT_FOUND', 'Company not found', 404); return item; }
+  createCompany(customerId: string, data: CompanyInput) { return db.company.create({ data: compact({ ...data, customerId }) as unknown as Prisma.CompanyUncheckedCreateInput }); }
+  async updateCompany(customerId: string, id: string, data: Update) { await this.getCompany(customerId, id); return db.company.update({ where: { id }, data }); }
+  async archiveCompany(customerId: string, id: string) { return this.updateCompany(customerId, id, { active: false }); }
   async listSuppliers(customerId: string, f: Filters) {
     const onlyActive = activeFilter(f.active);
     const where: Prisma.SupplierWhereInput = { customerId, ...(typeof onlyActive === 'boolean' ? { active: onlyActive } : {}), ...(f.country ? { country: f.country } : {}), ...(f.tier ? { tier: f.tier } : {}), ...(f.criticality ? { criticality: f.criticality } : {}), ...(f.search ? { name: { contains: f.search, mode: 'insensitive' as const } } : {}) };
@@ -57,13 +67,13 @@ export class SupplyChainService {
 
   async listPorts(f: Filters, customerId?: string, accessibleCustomerIds?: string[], isAdmin = false) { const onlyActive = activeFilter(f.active); const where: Prisma.PortWhereInput = { ...(typeof onlyActive === 'boolean' ? { active: onlyActive } : {}), ...(f.country ? { country: f.country } : {}), ...(f.search ? { name: { contains: f.search, mode: 'insensitive' as const } } : {}), ...(customerId ? { routePorts: { some: { customerId } } } : {}) }; const routeScope = customerId ? { customerId } : isAdmin ? {} : { customerId: { in: accessibleCustomerIds ?? [] } }; const args = { where, orderBy: { name: 'asc' as const }, skip: (f.page - 1) * f.pageSize, take: f.pageSize, include: { routePorts: { where: routeScope, include: { route: true }, orderBy: { sequence: 'asc' as const } } } }; const [items, total] = await db.$transaction([db.port.findMany(args), db.port.count({ where })]); return { items, pagination: pagination(f.page, f.pageSize, total) }; }
   createPort(data: PortInput) { return db.port.create({ data: coordinates(data) as unknown as Prisma.PortUncheckedCreateInput }); }
-  async createCustomerPort(customerId: string, data: PortInput & { routeId: string; sequence: number }) {
+  async createCustomerPort(customerId: string, data: PortInput & { routeId: string; sequence: number } & Required<RelationshipProvenance>) {
     await this.requireOwned('route', customerId, data.routeId);
-    const { routeId, sequence, ...portData } = data;
+    const { routeId, sequence, collectedAt, confidence, ...portData } = data;
     try {
       return await db.$transaction(async (tx) => {
         const port = await tx.port.create({ data: coordinates(portData) as unknown as Prisma.PortUncheckedCreateInput });
-        await tx.routePort.create({ data: { customerId, routeId, portId: port.id, sequence } });
+        await tx.routePort.create({ data: { customerId, routeId, portId: port.id, sequence, sourceName: data.sourceName, sourceUrl: data.sourceUrl, collectedAt, confidence } });
         return port;
       });
     } catch (error) {
@@ -75,32 +85,43 @@ export class SupplyChainService {
   async updatePort(id: string, data: Update) { const port = await db.port.findUnique({ where: { id } }); if (!port) throw new ServiceError('PORT_NOT_FOUND', 'Port not found', 404); return db.port.update({ where: { id }, data: coordinates(data) as Prisma.PortUncheckedUpdateInput }); }
   archivePort(id: string) { return this.updatePort(id, { active: false }); }
 
-  async attach(customerId: string, kind: 'supplier-product' | 'factory-product' | 'product-material' | 'route-supplier' | 'route-factory', sourceId: string, targetId: string) {
+  async attach(customerId: string, kind: 'supplier-product' | 'factory-product' | 'product-material' | 'route-supplier' | 'route-factory' | 'company-supplier', sourceId: string, targetId: string, provenance: RelationshipProvenance = {}) {
+    const evidence = requiredProvenance(provenance);
+    if (kind === 'company-supplier') {
+      await this.requireOwned('company', customerId, sourceId); await this.requireOwned('supplier', customerId, targetId);
+      try { return await db.companySupplier.create({ data: { customerId, companyId: sourceId, supplierId: targetId, ...evidence } }); } catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ServiceError('RELATIONSHIP_ALREADY_EXISTS', 'Relationship already exists', 409); throw error; }
+    }
     const config = { 'supplier-product': ['supplier', 'product', db.supplierProduct, { supplierId: sourceId, productId: targetId }], 'factory-product': ['factory', 'product', db.factoryProduct, { factoryId: sourceId, productId: targetId }], 'product-material': ['product', 'material', db.productMaterial, { productId: sourceId, materialId: targetId }], 'route-supplier': ['route', 'supplier', db.routeSupplier, { routeId: sourceId, supplierId: targetId }], 'route-factory': ['route', 'factory', db.routeFactory, { routeId: sourceId, factoryId: targetId }] }[kind] as [OwnedKind, OwnedKind, { create(args: unknown): Promise<unknown> }, Record<string, string>];
     await this.requireOwned(config[0], customerId, sourceId); await this.requireOwned(config[1], customerId, targetId);
-    try { return await config[2].create({ data: { ...config[3], customerId } }); } catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ServiceError('RELATIONSHIP_ALREADY_EXISTS', 'Relationship already exists', 409); throw error; }
+    try { return await config[2].create({ data: { ...config[3], customerId, ...evidence } }); } catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ServiceError('RELATIONSHIP_ALREADY_EXISTS', 'Relationship already exists', 409); throw error; }
   }
-  async detach(customerId: string, kind: 'supplier-product' | 'factory-product' | 'product-material' | 'route-supplier' | 'route-factory', sourceId: string, targetId: string) {
+  async detach(customerId: string, kind: 'supplier-product' | 'factory-product' | 'product-material' | 'route-supplier' | 'route-factory' | 'company-supplier', sourceId: string, targetId: string) {
+    if (kind === 'company-supplier') {
+      await this.requireOwned('company', customerId, sourceId); await this.requireOwned('supplier', customerId, targetId);
+      try { return await db.companySupplier.delete({ where: { companyId_supplierId: { companyId: sourceId, supplierId: targetId } } }); } catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') throw new ServiceError('INVALID_RELATIONSHIP', 'Relationship not found', 404); throw error; }
+    }
     const config = { 'supplier-product': ['supplier', 'product', db.supplierProduct, { supplierId_productId: { supplierId: sourceId, productId: targetId } }], 'factory-product': ['factory', 'product', db.factoryProduct, { factoryId_productId: { factoryId: sourceId, productId: targetId } }], 'product-material': ['product', 'material', db.productMaterial, { productId_materialId: { productId: sourceId, materialId: targetId } }], 'route-supplier': ['route', 'supplier', db.routeSupplier, { routeId_supplierId: { routeId: sourceId, supplierId: targetId } }], 'route-factory': ['route', 'factory', db.routeFactory, { routeId_factoryId: { routeId: sourceId, factoryId: targetId } }] }[kind] as [OwnedKind, OwnedKind, { delete(args: unknown): Promise<unknown> }, object];
     await this.requireOwned(config[0], customerId, sourceId); await this.requireOwned(config[1], customerId, targetId);
     try { return await config[2].delete({ where: config[3] }); } catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') throw new ServiceError('INVALID_RELATIONSHIP', 'Relationship not found', 404); throw error; }
   }
-  async addRoutePort(customerId: string, routeId: string, portId: string, sequence: number) { await this.requireOwned('route', customerId, routeId); if (!await db.port.findUnique({ where: { id: portId } })) throw new ServiceError('PORT_NOT_FOUND', 'Port not found', 404); try { return await db.routePort.create({ data: { customerId, routeId, portId, sequence } }); } catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ServiceError('RELATIONSHIP_ALREADY_EXISTS', 'Port or sequence is already used on this route', 409); throw error; } }
+  async addRoutePort(customerId: string, routeId: string, portId: string, sequence: number, provenance: RelationshipProvenance = {}) { await this.requireOwned('route', customerId, routeId); if (!await db.port.findUnique({ where: { id: portId } })) throw new ServiceError('PORT_NOT_FOUND', 'Port not found', 404); try { return await db.routePort.create({ data: { customerId, routeId, portId, sequence, ...requiredProvenance(provenance) } }); } catch (error) { if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') throw new ServiceError('RELATIONSHIP_ALREADY_EXISTS', 'Port or sequence is already used on this route', 409); throw error; } }
   async removeRoutePort(customerId: string, routeId: string, portId: string) { await this.requireOwned('route', customerId, routeId); try { return await db.routePort.delete({ where: { routeId_portId: { routeId, portId } } }); } catch { throw new ServiceError('INVALID_RELATIONSHIP', 'Route port not found', 404); } }
   async reorderRoutePorts(customerId: string, routeId: string, ports: { portId: string; sequence: number }[]) { await this.requireOwned('route', customerId, routeId); const existing = await db.routePort.findMany({ where: { routeId, customerId } }); if (existing.length !== ports.length || existing.some((item) => !ports.some((port) => port.portId === item.portId))) throw new ServiceError('INVALID_RELATIONSHIP', 'Reorder must include every current route port', 400); return db.$transaction(async (tx) => { for (const [index, port] of ports.entries()) await tx.routePort.update({ where: { routeId_portId: { routeId, portId: port.portId } }, data: { sequence: -(index + 1) } }); for (const port of ports) await tx.routePort.update({ where: { routeId_portId: { routeId, portId: port.portId } }, data: { sequence: port.sequence } }); return tx.routePort.findMany({ where: { routeId }, orderBy: { sequence: 'asc' } }); }); }
 
   async graph(customerId: string) {
-    const [customer, suppliers, factories, products, materials, routes, supplierProducts, factoryProducts, productMaterials, routeSuppliers, routeFactories, routePorts] = await Promise.all([
-      db.customer.findUnique({ where: { id: customerId } }), db.supplier.findMany({ where: { customerId } }), db.factory.findMany({ where: { customerId } }), db.product.findMany({ where: { customerId } }), db.material.findMany({ where: { customerId } }), db.route.findMany({ where: { customerId } }), db.supplierProduct.findMany({ where: { customerId } }), db.factoryProduct.findMany({ where: { customerId } }), db.productMaterial.findMany({ where: { customerId } }), db.routeSupplier.findMany({ where: { customerId } }), db.routeFactory.findMany({ where: { customerId } }), db.routePort.findMany({ where: { customerId }, orderBy: [{ routeId: 'asc' }, { sequence: 'asc' }] }),
+    const [customer, companies, countries, locations, suppliers, factories, products, materials, routes, companySuppliers, factoryLocations, supplierProducts, factoryProducts, productMaterials, routeSuppliers, routeFactories, routePorts] = await Promise.all([
+      db.customer.findUnique({ where: { id: customerId } }), db.company.findMany({ where: { customerId } }), db.country.findMany({ where: { locations: { some: { customerId } } } }), db.location.findMany({ where: { customerId } }), db.supplier.findMany({ where: { customerId } }), db.factory.findMany({ where: { customerId } }), db.product.findMany({ where: { customerId } }), db.material.findMany({ where: { customerId } }), db.route.findMany({ where: { customerId } }), db.companySupplier.findMany({ where: { customerId } }), db.factoryLocation.findMany({ where: { customerId } }), db.supplierProduct.findMany({ where: { customerId } }), db.factoryProduct.findMany({ where: { customerId } }), db.productMaterial.findMany({ where: { customerId } }), db.routeSupplier.findMany({ where: { customerId } }), db.routeFactory.findMany({ where: { customerId } }), db.routePort.findMany({ where: { customerId }, orderBy: [{ routeId: 'asc' }, { sequence: 'asc' }] }),
     ]);
     if (!customer) throw new ServiceError('CUSTOMER_NOT_FOUND', 'Customer not found', 404);
     const portIds = [...new Set(routePorts.map((item) => item.portId))];
     const ports = await db.port.findMany({ where: { id: { in: portIds } } });
-    return { customer, suppliers, factories, products, materials, routes, ports, relationships: { supplierProducts, factoryProducts, productMaterials, routeSuppliers, routeFactories, routePorts } };
+    return { customer, companies, countries, locations, suppliers, factories, products, materials, routes, ports, relationships: { companySuppliers, factoryLocations, supplierProducts, factoryProducts, productMaterials, routeSuppliers, routeFactories, routePorts } };
   }
 
-  private async requireOwned(kind: OwnedKind, customerId: string, id: string) { const model = { supplier: db.supplier, factory: db.factory, product: db.product, material: db.material, route: db.route }[kind] as { findUnique(args: unknown): Promise<{ customerId: string } | null> }; const entity = await model.findUnique({ where: { id }, select: { customerId: true } }); assertEntityBelongsToCustomer(customerId, entity, kind); }
+  private async requireOwned(kind: OwnedKind, customerId: string, id: string) { const model = { company: db.company, supplier: db.supplier, factory: db.factory, product: db.product, material: db.material, route: db.route }[kind] as { findUnique(args: unknown): Promise<{ customerId: string } | null> }; const entity = await model.findUnique({ where: { id }, select: { customerId: true } }); assertEntityBelongsToCustomer(customerId, entity, kind); }
 }
-type OwnedKind = 'supplier' | 'factory' | 'product' | 'material' | 'route';
+type OwnedKind = 'company' | 'supplier' | 'factory' | 'product' | 'material' | 'route';
+type RelationshipProvenance = { sourceName?: string; sourceUrl?: string; collectedAt?: Date; confidence?: number };
+function requiredProvenance(value: RelationshipProvenance) { if (!value.sourceName || !value.sourceUrl || !value.collectedAt || typeof value.confidence !== 'number') throw new ServiceError('PROVENANCE_REQUIRED', 'Company-supplier relationships require source, URL, collection date, and confidence', 400); return value as Required<RelationshipProvenance>; }
 export function assertEntityBelongsToCustomer(customerId: string, entity: { customerId: string } | null, kind: OwnedKind): void { if (!entity || entity.customerId !== customerId) throw new ServiceError('CROSS_CUSTOMER_RELATIONSHIP', `${kind} does not belong to this customer`, 409); }
 export const supplyChainService = new SupplyChainService();

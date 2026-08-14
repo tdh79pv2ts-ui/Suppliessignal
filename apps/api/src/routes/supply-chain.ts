@@ -1,6 +1,6 @@
 import { Router, type NextFunction, type Request, type Response, type Router as ExpressRouter } from 'express';
 import {
-  customerParamsSchema, customerPortCreateSchema, entityIdParamsSchema, factoryCreateSchema, factoryUpdateSchema,
+  companyCreateSchema, companyUpdateSchema, customerParamsSchema, customerPortCreateSchema, entityIdParamsSchema, factoryCreateSchema, factoryUpdateSchema,
   materialCreateSchema, materialUpdateSchema, paginationSchema, portCreateSchema, portUpdateSchema,
   productCreateSchema, productUpdateSchema, relationshipSchema, routeCreateSchema, routePortReorderSchema,
   routePortSchema, routeUpdateSchema, supplierCreateSchema, supplierUpdateSchema,
@@ -29,9 +29,10 @@ export function createSupplyChainRouter(resolveUser: ResolveUser, service: Suppl
   router.use('/customers/:customerId', requireCustomerAccess);
   router.get('/customers/:customerId/supply-chain', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string }>(customerParamsSchema, req.params, res); if (params) res.json({ data: await service.graph(params.customerId) }); }));
   router.get('/customers/:customerId/ports', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string }>(customerParamsSchema, req.params, res); const query = parsed<Filters>(paginationSchema, req.query, res); if (params && query) res.json({ data: await service.listPorts(query, params.customerId) }); }));
-  router.post('/customers/:customerId/ports', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string }>(customerParamsSchema, req.params, res); const body = parsed<PortInput & { routeId: string; sequence: number }>(customerPortCreateSchema, req.body, res); if (params && body) res.status(201).json({ data: await service.createCustomerPort(params.customerId, body) }); }));
+  router.post('/customers/:customerId/ports', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string }>(customerParamsSchema, req.params, res); const body = parsed<PortInput & { routeId: string; sequence: number; sourceName: string; sourceUrl: string; collectedAt: Date; confidence: number }>(customerPortCreateSchema, req.body, res); if (params && body) res.status(201).json({ data: await service.createCustomerPort(params.customerId, body) }); }));
 
   const entities = [
+    ['companies', companyCreateSchema, companyUpdateSchema, service.listCompanies.bind(service), service.getCompany.bind(service), service.createCompany.bind(service), service.updateCompany.bind(service), service.archiveCompany.bind(service)],
     ['suppliers', supplierCreateSchema, supplierUpdateSchema, service.listSuppliers.bind(service), service.getSupplier.bind(service), service.createSupplier.bind(service), service.updateSupplier.bind(service), service.archiveSupplier.bind(service)],
     ['factories', factoryCreateSchema, factoryUpdateSchema, service.listFactories.bind(service), service.getFactory.bind(service), service.createFactory.bind(service), service.updateFactory.bind(service), service.archiveFactory.bind(service)],
     ['products', productCreateSchema, productUpdateSchema, service.listProducts.bind(service), service.getProduct.bind(service), service.createProduct.bind(service), service.updateProduct.bind(service), service.archiveProduct.bind(service)],
@@ -48,13 +49,14 @@ export function createSupplyChainRouter(resolveUser: ResolveUser, service: Suppl
   }
 
   const relationRoutes = [
+    ['companies', 'suppliers', 'company-supplier'],
     ['suppliers', 'products', 'supplier-product'], ['factories', 'products', 'factory-product'], ['products', 'materials', 'product-material'], ['routes', 'suppliers', 'route-supplier'], ['routes', 'factories', 'route-factory'],
   ] as const;
   for (const [source, targets, kind] of relationRoutes) {
-    router.post(`/customers/:customerId/${source}/:id/${targets}`, asyncHandler(async (req, res) => { const params = parsed<{ customerId: string; id: string }>(entityIdParamsSchema, req.params, res); const body = parsed<{ targetId: string }>(relationshipSchema, req.body, res); if (params && body) res.status(201).json({ data: await service.attach(params.customerId, kind, params.id, body.targetId) }); }));
+    router.post(`/customers/:customerId/${source}/:id/${targets}`, asyncHandler(async (req, res) => { const params = parsed<{ customerId: string; id: string }>(entityIdParamsSchema, req.params, res); const body = parsed<{ targetId: string; sourceName?: string; sourceUrl?: string; collectedAt?: Date; confidence?: number }>(relationshipSchema, req.body, res); if (params && body) { const { targetId, ...provenance } = body; res.status(201).json({ data: await service.attach(params.customerId, kind, params.id, targetId, provenance) }); } }));
     router.delete(`/customers/:customerId/${source}/:id/${targets}/:targetId`, asyncHandler(async (req, res) => { const params = parsed<{ customerId: string; id: string; targetId: string }>(entityIdParamsSchema.extend({ targetId: relationshipSchema.shape.targetId }), req.params, res); if (params) { await service.detach(params.customerId, kind, params.id, params.targetId); res.status(204).send(); } }));
   }
-  router.post('/customers/:customerId/routes/:id/ports', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string; id: string }>(entityIdParamsSchema, req.params, res); const body = parsed<{ portId: string; sequence: number }>(routePortSchema, req.body, res); if (params && body) res.status(201).json({ data: await service.addRoutePort(params.customerId, params.id, body.portId, body.sequence) }); }));
+  router.post('/customers/:customerId/routes/:id/ports', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string; id: string }>(entityIdParamsSchema, req.params, res); const body = parsed<{ portId: string; sequence: number; sourceName: string; sourceUrl: string; collectedAt: Date; confidence: number }>(routePortSchema, req.body, res); if (params && body) { const { portId, sequence, ...provenance } = body; res.status(201).json({ data: await service.addRoutePort(params.customerId, params.id, portId, sequence, provenance) }); } }));
   router.delete('/customers/:customerId/routes/:id/ports/:targetId', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string; id: string; targetId: string }>(entityIdParamsSchema.extend({ targetId: relationshipSchema.shape.targetId }), req.params, res); if (params) { await service.removeRoutePort(params.customerId, params.id, params.targetId); res.status(204).send(); } }));
   router.put('/customers/:customerId/routes/:id/ports', asyncHandler(async (req, res) => { const params = parsed<{ customerId: string; id: string }>(entityIdParamsSchema, req.params, res); const body = parsed<{ ports: { portId: string; sequence: number }[] }>(routePortReorderSchema, req.body, res); if (params && body) res.json({ data: await service.reorderRoutePorts(params.customerId, params.id, body.ports) }); }));
   return router;

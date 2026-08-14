@@ -12,6 +12,8 @@ const entityId = '11111111-1111-4111-8111-111111111111';
 const targetId = '22222222-2222-4222-8222-222222222222';
 const member: AuthenticatedUser = { id: crypto.randomUUID(), email: 'member@example.com', name: 'Member', role: 'CUSTOMER', customerIds: [customerId] };
 const admin: AuthenticatedUser = { ...member, role: 'ADMIN', customerIds: [] };
+const evidence = { sourceName: 'Test disclosure', sourceUrl: 'https://example.com/disclosure', collectedAt: '2026-08-14', confidence: 1 };
+const entityEvidence = { sourceName: evidence.sourceName, sourceUrl: evidence.sourceUrl, verifiedAt: '2026-08-14' };
 
 function testApp(user: AuthenticatedUser | null, overrides: Record<string, (...args: unknown[]) => unknown> = {}) {
   const defaults = new Proxy({}, { get: (_target, property) => overrides[String(property)] ?? vi.fn(async () => ({ id: entityId, name: 'Record', active: true, items: [], pagination: { page: 1, pageSize: 50, total: 0, totalPages: 0 } })) }) as SupplyChainService;
@@ -20,6 +22,7 @@ function testApp(user: AuthenticatedUser | null, overrides: Record<string, (...a
 
 describe('supply-chain API routes', () => {
   const createBodies = {
+    companies: { name: 'Company', ...entityEvidence },
     suppliers: { name: 'Supplier', country: 'Bangladesh', tier: 'TIER_1', criticality: 'HIGH' },
     factories: { name: 'Factory', country: 'Bangladesh', criticality: 'HIGH' },
     products: { name: 'Product', criticality: 'HIGH' },
@@ -42,14 +45,14 @@ describe('supply-chain API routes', () => {
   });
   it('supports relationship attach/remove and ordered ports', async () => {
     const app = testApp(member);
-    expect((await request(app).post(`/api/customers/${customerId}/suppliers/${entityId}/products`).send({ targetId })).status).toBe(201);
+    expect((await request(app).post(`/api/customers/${customerId}/suppliers/${entityId}/products`).send({ targetId, ...evidence })).status).toBe(201);
     expect((await request(app).delete(`/api/customers/${customerId}/suppliers/${entityId}/products/${targetId}`)).status).toBe(204);
-    expect((await request(app).post(`/api/customers/${customerId}/routes/${entityId}/ports`).send({ portId: targetId, sequence: 1 })).status).toBe(201);
+    expect((await request(app).post(`/api/customers/${customerId}/routes/${entityId}/ports`).send({ portId: targetId, sequence: 1, ...evidence })).status).toBe(201);
     expect((await request(app).put(`/api/customers/${customerId}/routes/${entityId}/ports`).send({ ports: [{ portId: targetId, sequence: 1 }] })).status).toBe(200);
   });
   it('maps duplicate and cross-customer relationship errors safely', async () => {
     const duplicate = testApp(member, { attach: async () => { throw new ServiceError('RELATIONSHIP_ALREADY_EXISTS', 'Relationship already exists', 409); } });
-    const response = await request(duplicate).post(`/api/customers/${customerId}/suppliers/${entityId}/products`).send({ targetId });
+    const response = await request(duplicate).post(`/api/customers/${customerId}/suppliers/${entityId}/products`).send({ targetId, ...evidence });
     expect(response.status).toBe(409); expect(response.body.error.code).toBe('RELATIONSHIP_ALREADY_EXISTS');
   });
   it('prevents non-admin port mutation and allows admins', async () => {
@@ -58,7 +61,7 @@ describe('supply-chain API routes', () => {
     expect((await request(testApp(admin)).post('/api/ports').send(body)).status).toBe(201);
   });
   it('allows a customer to create a port only with an explicit owned route link', async () => {
-    const body = { name: 'Customer Port', country: 'Thailand', routeId: entityId, sequence: 1 };
+    const body = { name: 'Customer Port', country: 'Thailand', routeId: entityId, sequence: 1, ...entityEvidence, ...evidence };
     expect((await request(testApp(member)).post(`/api/customers/${customerId}/ports`).send(body)).status).toBe(201);
     expect((await request(testApp(member)).post(`/api/customers/${otherCustomerId}/ports`).send(body)).status).toBe(403);
   });
