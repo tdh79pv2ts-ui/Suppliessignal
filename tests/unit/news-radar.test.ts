@@ -92,4 +92,26 @@ describe('deterministic supply-chain news radar matching', () => {
       expect.objectContaining({ entityType: 'SUPPLIER', relevanceLevel: 'HIGH' }),
     ]));
   });
+
+  it('does not let a generic custom tag flood the main feed without graph context', () => {
+    expect(match('Global inflation outlook changes again', graph({
+      monitoringTags: [{ label: 'inflation', type: 'CUSTOM' }],
+    }))).toHaveLength(0);
+  });
+
+  it('uses an active custom tag only when explicit customer graph context is also present', () => {
+    expect(match('Inflation affects Foxconn Precision Components in Vietnam', graph({
+      monitoringTags: [{ label: 'inflation', type: 'CUSTOM' }],
+    }))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'SUPPLIER', relevanceLevel: 'HIGH' }),
+    ]));
+  });
+
+  it('uses a suggested disruption theme with an exact customer country dependency', () => {
+    expect(match('Minimum wage changes affect factories in Vietnam', graph({
+      monitoringTags: [{ label: 'minimum wage', type: 'SUGGESTED' }],
+    }))).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'FACTORY', relevanceLevel: 'MEDIUM' }),
+    ]));
+  });
 });

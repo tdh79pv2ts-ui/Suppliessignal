@@ -4,6 +4,7 @@ import type { NewsRadarListInput } from '@suppliesignal/shared';
 import { ServiceError } from './errors.js';
 import { sourceHealth } from './source-intelligence.js';
 import { buildRegionalProfile, sourceRecommendation } from './regional-source-profile.js';
+import { monitoringProfileService } from './monitoring-profile.js';
 import {
   matchArticleToSupplyChain,
   type NewsRadarGraph,
@@ -11,7 +12,7 @@ import {
 } from './news-radar-matching.js';
 
 const LEASE_MS = 2 * 60 * 1000;
-export const NEWS_RADAR_POLICY_VERSION = '2.0';
+export const NEWS_RADAR_POLICY_VERSION = '3.0';
 
 const exposureInclude = {
   sourceArticle: { include: { source: true, translations: { where: { status: 'COMPLETED' as const } } } },
@@ -86,7 +87,7 @@ export class NewsRadarService {
         distinct: ['sourceArticleId'], select: { sourceArticleId: true },
       }),
       db.sourceCollectionRun.findFirst({ orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
-      db.source.findMany({ include: { collectionRuns: { take: 1, orderBy: { startedAt: 'desc' } }, _count: { select: { articles: true } } }, orderBy: { name: 'asc' } }),
+      db.source.findMany({ include: { customerPreferences: { where: { customerId }, select: { enabled: true } }, collectionRuns: { take: 1, orderBy: { startedAt: 'desc' } }, _count: { select: { articles: true } } }, orderBy: { name: 'asc' } }),
       db.sourceCollectionRun.findMany({ take: 8, orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
       db.company.findMany({ where: { customerId, active: true } }),
       db.location.findMany({ where: { customerId, active: true } }),
@@ -111,7 +112,7 @@ export class NewsRadarService {
       },
       latestCollection: latestRun,
       monitoringProfile,
-      sources: sources.map(({ source, recommendation }) => ({ id: source.id, name: source.name, type: source.sourceType, url: source.feedUrl ?? source.baseUrl, country: source.country, region: source.region, industry: source.industry, category: source.category, language: source.language, lastChecked: source.lastCollectedAt, lastSuccessfulSync: source.lastSuccessfulCollectionAt, status: sourceStatus(source), health: sourceHealth(source), articleCount: source._count.articles, recommendation, lastRun: source.collectionRuns[0] ?? null })),
+      sources: sources.map(({ source, recommendation }) => ({ id: source.id, name: source.name, type: source.sourceType, url: source.feedUrl ?? source.baseUrl, country: source.country, region: source.region, industry: source.industry, category: source.category, language: source.language, lastChecked: source.lastCollectedAt, lastSuccessfulSync: source.lastSuccessfulCollectionAt, status: source.customerPreferences[0]?.enabled === false ? 'DISABLED' : sourceStatus(source), health: sourceHealth(source), articleCount: source._count.articles, recommendation, lastRun: source.collectionRuns[0] ?? null })),
       recentUpdates: recentRuns,
       articles: relevantArticles,
     };
@@ -183,6 +184,11 @@ export class NewsRadarService {
       const locations = new Set<string>();
       let exposuresCreated = 0;
       for (const { customerId, graph } of graphs) {
+        const sourcePreference = await db.customerSourcePreference.findUnique({
+          where: { customerId_sourceId: { customerId, sourceId: article.sourceId } },
+          select: { enabled: true },
+        });
+        if (sourcePreference?.enabled === false) continue;
         const english = article.translations[0];
         const result = matchArticleToSupplyChain({
           title: article.title,
@@ -240,7 +246,10 @@ export class NewsRadarService {
 
   private async customerGraphs() {
     const customers = await db.customer.findMany({ select: { id: true } });
-    return Promise.all(customers.map(async ({ id }) => ({ customerId: id, graph: await this.graph(id) })));
+    return Promise.all(customers.map(async ({ id }) => {
+      const [graph, monitoringTags] = await Promise.all([this.graph(id), monitoringProfileService.activeTags(id)]);
+      return { customerId: id, graph: { ...graph, monitoringTags } };
+    }));
   }
 
   private async graph(customerId: string): Promise<NewsRadarGraph> {

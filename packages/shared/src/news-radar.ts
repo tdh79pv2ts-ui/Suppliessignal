@@ -71,6 +71,42 @@ export const dailyBriefDateSchema = z.object({
   date: z.string().date().optional(),
 });
 
+export const monitoringTagTypes = ['AUTO', 'SUGGESTED', 'CUSTOM'] as const;
+export const monitoringTagStatuses = ['PENDING', 'ACTIVE', 'DISABLED', 'IGNORED'] as const;
+export const monitoringTagCategories = [
+  'SUPPLIER', 'FACTORY', 'PRODUCT', 'MATERIAL', 'LOCATION', 'COUNTRY',
+  'REGION', 'PORT', 'ROUTE', 'INDUSTRY', 'THEME',
+] as const;
+
+export const monitoringTagParamsSchema = z.object({
+  customerId: z.string().uuid(),
+  tagId: z.string().uuid(),
+});
+
+export const customMonitoringTagSchema = z.object({
+  label: z.string().trim().min(2).max(100),
+  category: z.enum(monitoringTagCategories).default('THEME'),
+});
+
+export const monitoringTagUpdateSchema = z.object({
+  label: z.string().trim().min(2).max(100).optional(),
+  category: z.enum(monitoringTagCategories).optional(),
+  status: z.enum(monitoringTagStatuses).optional(),
+}).refine((value) => Object.keys(value).length > 0, 'At least one field is required');
+
+export const customerSourceParamsSchema = z.object({
+  customerId: z.string().uuid(),
+  sourceId: z.string().uuid(),
+});
+
+export const customerSourcePreferenceSchema = z.object({ enabled: z.boolean() });
+
+export const enableRecommendedSourcesSchema = z.object({
+  country: z.string().trim().min(2).max(100).nullable().default(null),
+});
+
 export type NewsRadarListInput = z.infer<typeof newsRadarListSchema>;
 export type DailyBriefPreferenceInput = z.infer<typeof dailyBriefPreferenceSchema>;
 export type NewsletterPreferenceInput = DailyBriefPreferenceInput;
+export type CustomMonitoringTagInput = z.infer<typeof customMonitoringTagSchema>;
+export type MonitoringTagUpdateInput = z.infer<typeof monitoringTagUpdateSchema>;

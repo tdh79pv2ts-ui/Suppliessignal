@@ -60,6 +60,9 @@ pnpm db:migrate      # apply/create development migrations
 pnpm db:deploy       # apply existing migrations without reset (staging/production)
 pnpm db:seed         # seed demo graph/users and verified real-news source configuration
 pnpm db:verify-migrations # clean and Phase 5 hardening upgrade verification
+pnpm poc:validate-data # database-backed BSK source, evidence and tenant-integrity audit
+pnpm poc:verify-data # clean disposable PostgreSQL migration + seed + BSK data audit
+pnpm poc:benchmark benchmarks/bsk-news-radar.json # >=100 human-labelled real articles; requires >=95% precision
 pnpm --filter @suppliesignal/api start:poc-worker # five-minute collection + BSK relevance cycle
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
 pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process
@@ -82,7 +85,7 @@ Use a managed PostgreSQL database, set `NODE_ENV=production` plus an explicit `A
 
 ## Phase status
 
-The active POC prioritizes regional sources for China, Myanmar, and Bangladesh, then uses global trade/weather feeds only as fallbacks. It matches SourceArticles directly to explicit customer graph data without Claims, extraction, Events, candidate/identity/review workflows, scoring, alerts, or automated decisions. `start:poc-worker` runs the ordered fetch → deduplicate/store → optional translation → relevance-update cycle every five minutes. Source failures and collection counters are persisted and visible in the dashboard. The optional Daily Brief contains only evidence-linked `HIGH` and `MEDIUM` items from the user's membership-scoped customer.
+The active POC derives AUTO monitoring tags, explainable suggestions, language needs, and source recommendations from each customer's graph. Its curated public-source universe provides deep China, Myanmar, and Bangladesh coverage plus global trade/weather fallbacks; public WEB references are never presented as automatically collected feeds. It matches SourceArticles directly to explicit customer graph data without Claims, extraction, Events, candidate/identity/review workflows, scoring, alerts, or automated decisions. `start:poc-worker` runs the ordered fetch → cross-publisher deduplicate/store → optional translation → relevance-update cycle every five minutes. Source failures and collection counters are persisted. The optional Daily Brief contains only evidence-linked `HIGH` and `MEDIUM` items from the user's membership-scoped customer.
 
 The seed also contains a [BSK Fashion public-data workspace](docs/bsk-fashion-poc.md) with four published facilities, public product categories, and public material names. Unknown suppliers, routes, ports, and graph relationships are intentionally left empty.
 

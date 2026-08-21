@@ -124,6 +124,33 @@ enum NewsRadarRelevanceLevel {
   LOW
 }
 
+enum MonitoringTagType {
+  AUTO
+  SUGGESTED
+  CUSTOM
+}
+
+enum MonitoringTagStatus {
+  PENDING
+  ACTIVE
+  DISABLED
+  IGNORED
+}
+
+enum MonitoringTagCategory {
+  SUPPLIER
+  FACTORY
+  PRODUCT
+  MATERIAL
+  LOCATION
+  COUNTRY
+  REGION
+  PORT
+  ROUTE
+  INDUSTRY
+  THEME
+}
+
 enum ArticleTranslationStatus {
   PENDING
   COMPLETED
@@ -472,6 +499,7 @@ model User {
   reviewedExposureCandidates     ExposureCandidate[]
   dailyBriefPreferences          DailyBriefPreference[]
   dailyBriefDeliveries           DailyBriefDelivery[]
+  monitoringTags                 CustomerMonitoringTag[] @relation("MonitoringTagCreator")
   createdAt                      DateTime                @default(now()) @map("created_at")
   updatedAt                      DateTime                @updatedAt @map("updated_at")
 
@@ -501,6 +529,8 @@ model Customer {
   dailyBriefPreferences DailyBriefPreference[]
   dailyBriefDeliveries  DailyBriefDelivery[]
   dailyBriefs           DailyBrief[]
+  monitoringTags        CustomerMonitoringTag[]
+  sourcePreferences     CustomerSourcePreference[]
   createdAt             DateTime                @default(now()) @map("created_at")
   updatedAt             DateTime                @updatedAt @map("updated_at")
 
@@ -938,12 +968,51 @@ model Source {
   consecutiveFailures        Int                   @default(0) @map("consecutive_failures")
   articles                   SourceArticle[]
   collectionRuns             SourceCollectionRun[]
+  customerPreferences        CustomerSourcePreference[]
   createdAt                  DateTime              @default(now()) @map("created_at")
   updatedAt                  DateTime              @updatedAt @map("updated_at")
 
   @@index([active, collectionEnabled])
   @@index([sourceType, category])
   @@map("sources")
+}
+
+model CustomerMonitoringTag {
+  id            String                @id @default(uuid()) @db.Uuid
+  customerId    String                @map("customer_id") @db.Uuid
+  type          MonitoringTagType
+  key           String
+  label         String
+  normalizedLabel String              @map("normalized_label")
+  category      MonitoringTagCategory
+  status        MonitoringTagStatus
+  reason        String
+  derivedActive Boolean               @default(true) @map("derived_active")
+  createdByUserId String?             @map("created_by_user_id") @db.Uuid
+  customer      Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdByUser User?                 @relation("MonitoringTagCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+
+  @@unique([customerId, type, key])
+  @@index([customerId, type, status, derivedActive])
+  @@map("customer_monitoring_tags")
+}
+
+model CustomerSourcePreference {
+  customerId String   @map("customer_id") @db.Uuid
+  sourceId   String   @map("source_id") @db.Uuid
+  enabled    Boolean  @default(true)
+  recommended Boolean @default(false)
+  reason     String?
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  source     Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@id([customerId, sourceId])
+  @@index([sourceId, enabled])
+  @@map("customer_source_preferences")
 }
 
 model SourceArticle {

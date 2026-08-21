@@ -1,4 +1,5 @@
 import { PrismaClient, UserRole } from '@prisma/client';
+import { bskPublicSourceCatalog } from './source-catalog.js';
 
 const prisma = new PrismaClient();
 const verifiedAt = new Date('2026-08-14T00:00:00.000Z');
@@ -185,10 +186,46 @@ async function main() {
   ];
   for (const source of regionalNewsSources) await prisma.source.upsert({ where: { id: source.id }, update: { ...source, active: true, collectionEnabled: true, collectionIntervalMinutes: 5 }, create: { ...source, active: true, collectionEnabled: true, collectionIntervalMinutes: 5 } });
   const realNewsSources = [
-    { id: 'a1000000-0000-4000-8000-000000000001', name: 'USGS Significant Earthquakes', sourceType: 'ATOM' as const, baseUrl: 'https://earthquake.usgs.gov/', feedUrl: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom', industry: 'Physical disruption monitoring', category: 'WEATHER' as const },
-    { id: 'a1000000-0000-4000-8000-000000000002', name: 'World Trade Organization News', sourceType: 'RSS' as const, baseUrl: 'https://www.wto.org/', feedUrl: 'https://www.wto.org/library/rss/latest_news_e.xml', industry: 'Global trade policy', category: 'TRADE' as const },
+    { id: 'a1000000-0000-4000-8000-000000000001', name: 'USGS Significant Earthquakes', sourceType: 'ATOM' as const, baseUrl: 'https://earthquake.usgs.gov/', feedUrl: 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom', industry: 'Physical disruption monitoring', category: 'WEATHER' as const, language: 'en' },
+    { id: 'a1000000-0000-4000-8000-000000000002', name: 'World Trade Organization News', sourceType: 'RSS' as const, baseUrl: 'https://www.wto.org/', feedUrl: 'https://www.wto.org/library/rss/latest_news_e.xml', industry: 'Global trade policy', category: 'TRADE' as const, language: 'en' },
   ];
   for (const source of realNewsSources) await prisma.source.upsert({ where: { id: source.id }, update: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 5 }, create: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 5 } });
+  for (const catalogSource of bskPublicSourceCatalog) {
+    const existing = await prisma.source.findFirst({ where: { name: catalogSource.name } });
+    const data = {
+      ...catalogSource,
+      sourceType: catalogSource.sourceType ?? ('WEB' as const),
+      feedUrl: catalogSource.feedUrl ?? null,
+      active: true,
+      collectionEnabled: catalogSource.collectionEnabled ?? false,
+      collectionIntervalMinutes: catalogSource.collectionEnabled ? 5 : 15,
+    };
+    if (existing) await prisma.source.update({ where: { id: existing.id }, data });
+    else await prisma.source.create({ data });
+  }
+  const bskSourceUniverse = await prisma.source.findMany({
+    where: {
+      active: true,
+      OR: [
+        { country: { in: ['Bangladesh', 'China', 'Myanmar'] } },
+        { region: { in: ['South Asia', 'Greater China', 'Southeast Asia'] } },
+        { country: null, region: null },
+      ],
+    },
+  });
+  for (const source of bskSourceUniverse) await prisma.customerSourcePreference.upsert({
+    where: { customerId_sourceId: { customerId: bskCustomer.id, sourceId: source.id } },
+    update: { recommended: true },
+    create: {
+      customerId: bskCustomer.id,
+      sourceId: source.id,
+      enabled: source.collectionEnabled || !['RSS', 'ATOM'].includes(source.sourceType),
+      recommended: true,
+      reason: source.country
+        ? `Covers verified BSK operations in ${source.country}.`
+        : 'Global fallback for trade, logistics, labour, material, regulatory, or physical-disruption context.',
+    },
+  });
   for (const customerId of [customer.id, bskCustomer.id]) await prisma.dailyBriefPreference.upsert({ where: { userId_customerId: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId } }, update: {}, create: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId, enabled: false, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'customer@demo.suppliesignal.local', language: 'en' } });
 }
 

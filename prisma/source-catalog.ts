@@ -1,0 +1,177 @@
+import { SourceCategory, SourceReliability, SourceType } from '@prisma/client';
+
+export type SourceCatalogEntry = {
+  name: string;
+  baseUrl: string;
+  country: string | null;
+  region: string | null;
+  industry: string;
+  category: SourceCategory;
+  reliability: SourceReliability;
+  language: string | null;
+  sourceType?: SourceType;
+  feedUrl?: string;
+  collectionEnabled?: boolean;
+};
+
+const source = (
+  name: string, baseUrl: string, country: string | null, region: string | null,
+  category: SourceCategory, reliability: SourceReliability, language: string | null,
+  industry: string,
+): SourceCatalogEntry => ({ name, baseUrl, country, region, category, reliability, language, industry });
+
+export const bskPublicSourceCatalog: SourceCatalogEntry[] = [
+  // Bangladesh: government, labour, trade, logistics, industry and established media.
+  source('Bangladesh Ministry of Commerce', 'https://mincom.gov.bd/', 'Bangladesh', 'South Asia', 'GOVERNMENT', 'PRIMARY', 'bn', 'Trade policy and exports'),
+  source('Bangladesh National Board of Revenue', 'https://nbr.gov.bd/', 'Bangladesh', 'South Asia', 'REGULATOR', 'PRIMARY', 'en', 'Tax and customs regulation'),
+  source('Bangladesh Export Promotion Bureau', 'https://epb.gov.bd/', 'Bangladesh', 'South Asia', 'GOVERNMENT', 'PRIMARY', 'en', 'Export policy and statistics'),
+  source('Bangladesh Trade and Tariff Commission', 'https://btc.gov.bd/', 'Bangladesh', 'South Asia', 'REGULATOR', 'PRIMARY', 'bn', 'Tariffs and trade remedies'),
+  source('Bangladesh Chief Controller of Imports and Exports', 'https://ccie.gov.bd/', 'Bangladesh', 'South Asia', 'REGULATOR', 'PRIMARY', 'bn', 'Import and export controls'),
+  source('Bangladesh Investment Development Authority', 'https://bida.gov.bd/', 'Bangladesh', 'South Asia', 'GOVERNMENT', 'PRIMARY', 'en', 'Investment and industrial policy'),
+  source('Bangladesh Bank', 'https://www.bb.org.bd/', 'Bangladesh', 'South Asia', 'REGULATOR', 'PRIMARY', 'en', 'Currency and financial conditions'),
+  source('Bangladesh Bureau of Statistics', 'https://bbs.gov.bd/', 'Bangladesh', 'South Asia', 'GOVERNMENT', 'PRIMARY', 'en', 'Economic and industrial statistics'),
+  source('Bangladesh Ministry of Labour and Employment', 'https://mole.gov.bd/', 'Bangladesh', 'South Asia', 'LABOUR', 'PRIMARY', 'bn', 'Labour law and policy'),
+  source('Bangladesh Department of Inspection for Factories and Establishments', 'https://dife.gov.bd/', 'Bangladesh', 'South Asia', 'LABOUR', 'PRIMARY', 'bn', 'Factory safety and labour compliance'),
+  source('Bangladesh Minimum Wage Board', 'https://mwb.gov.bd/', 'Bangladesh', 'South Asia', 'LABOUR', 'PRIMARY', 'bn', 'Minimum wage regulation'),
+  source('Bangladesh Ministry of Industries', 'https://moind.gov.bd/', 'Bangladesh', 'South Asia', 'GOVERNMENT', 'PRIMARY', 'bn', 'Industrial policy'),
+  source('Bangladesh Ministry of Textiles and Jute', 'https://motj.gov.bd/', 'Bangladesh', 'South Asia', 'GOVERNMENT', 'PRIMARY', 'bn', 'Textile and jute policy'),
+  source('Bangladesh Department of Environment', 'https://doe.gov.bd/', 'Bangladesh', 'South Asia', 'REGULATOR', 'PRIMARY', 'bn', 'Environmental regulation'),
+  source('Bangladesh Disaster Management Department', 'https://ddm.gov.bd/', 'Bangladesh', 'South Asia', 'WEATHER', 'PRIMARY', 'bn', 'Disaster alerts and response'),
+  source('Bangladesh Power Division', 'https://powerdivision.gov.bd/', 'Bangladesh', 'South Asia', 'GOVERNMENT', 'PRIMARY', 'bn', 'Power and energy availability'),
+  source('Chattogram Port Authority', 'https://cpa.gov.bd/', 'Bangladesh', 'South Asia', 'PORT', 'PRIMARY', 'en', 'Port operations and notices'),
+  source('Mongla Port Authority', 'https://mpa.gov.bd/', 'Bangladesh', 'South Asia', 'PORT', 'PRIMARY', 'en', 'Port operations and notices'),
+  source('Payra Port Authority', 'https://ppa.gov.bd/', 'Bangladesh', 'South Asia', 'PORT', 'PRIMARY', 'en', 'Port operations and notices'),
+  source('Bangladesh Inland Water Transport Authority', 'https://biwta.gov.bd/', 'Bangladesh', 'South Asia', 'LOGISTICS', 'PRIMARY', 'bn', 'Inland transport and waterways'),
+  source('Bangladesh Civil Aviation Authority', 'https://caab.gov.bd/', 'Bangladesh', 'South Asia', 'LOGISTICS', 'PRIMARY', 'en', 'Air freight infrastructure'),
+  source('Bangladesh Knitwear Manufacturers and Exporters Association', 'https://www.bkmea.com/', 'Bangladesh', 'South Asia', 'INDUSTRY', 'HIGH', 'en', 'Knitwear manufacturing and exports'),
+  source('Bangladesh Textile Mills Association', 'https://www.btmadhaka.com/', 'Bangladesh', 'South Asia', 'INDUSTRY', 'HIGH', 'en', 'Textile manufacturing'),
+  source('Federation of Bangladesh Chambers of Commerce and Industry', 'https://fbcci.org/', 'Bangladesh', 'South Asia', 'INDUSTRY', 'HIGH', 'en', 'Business and manufacturing'),
+  source('Dhaka Chamber of Commerce and Industry', 'https://www.dhakachamber.com/', 'Bangladesh', 'South Asia', 'INDUSTRY', 'HIGH', 'en', 'Regional business conditions'),
+  source('Chittagong Chamber of Commerce and Industry', 'https://www.chittagongchamber.com/', 'Bangladesh', 'South Asia', 'INDUSTRY', 'HIGH', 'en', 'Port-region business conditions'),
+  source('The Business Standard Bangladesh', 'https://www.tbsnews.net/', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Business, apparel and trade reporting'),
+  source('The Financial Express Bangladesh', 'https://thefinancialexpress.com.bd/', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Business and economic reporting'),
+  source('Dhaka Tribune Business', 'https://www.dhakatribune.com/business', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Business and labour reporting'),
+  source('Bangladesh Sangbad Sangstha', 'https://www.bssnews.net/', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'National public-interest reporting'),
+  source('Prothom Alo English', 'https://en.prothomalo.com/', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'National and regional reporting'),
+  source('New Age Bangladesh Business', 'https://www.newagebd.net/business', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Business and industrial reporting'),
+
+  // China and Guangdong: central and regional authorities, ports, industry and media.
+  source('State Council of China', 'https://english.www.gov.cn/', 'China', 'Greater China', 'GOVERNMENT', 'PRIMARY', 'en', 'National policy and regulation'),
+  source('China Ministry of Commerce', 'https://english.mofcom.gov.cn/', 'China', 'Greater China', 'GOVERNMENT', 'PRIMARY', 'en', 'Trade and export-control policy'),
+  source('General Administration of Customs of China English', 'http://english.customs.gov.cn/', 'China', 'Greater China', 'REGULATOR', 'PRIMARY', 'en', 'Customs regulation and trade data'),
+  source('China National Development and Reform Commission', 'https://en.ndrc.gov.cn/', 'China', 'Greater China', 'GOVERNMENT', 'PRIMARY', 'en', 'Economic and industrial policy'),
+  source('China Ministry of Industry and Information Technology', 'https://www.miit.gov.cn/', 'China', 'Greater China', 'GOVERNMENT', 'PRIMARY', 'zh', 'Manufacturing policy'),
+  source('China Ministry of Ecology and Environment', 'https://english.mee.gov.cn/', 'China', 'Greater China', 'REGULATOR', 'PRIMARY', 'en', 'Environmental regulation'),
+  source('China Ministry of Emergency Management', 'https://www.mem.gov.cn/', 'China', 'Greater China', 'WEATHER', 'PRIMARY', 'zh', 'Emergency and industrial incident information'),
+  source('China Ministry of Transport', 'https://en.mot.gov.cn/', 'China', 'Greater China', 'LOGISTICS', 'PRIMARY', 'en', 'Transport and logistics policy'),
+  source('Civil Aviation Administration of China', 'http://www.caac.gov.cn/en/', 'China', 'Greater China', 'LOGISTICS', 'PRIMARY', 'en', 'Air transport and freight'),
+  source('National Bureau of Statistics of China', 'https://www.stats.gov.cn/english/', 'China', 'Greater China', 'GOVERNMENT', 'PRIMARY', 'en', 'Industrial and economic statistics'),
+  source('People’s Bank of China', 'http://www.pbc.gov.cn/en/3688006/index.html', 'China', 'Greater China', 'REGULATOR', 'PRIMARY', 'en', 'Currency and financial conditions'),
+  source('China State Administration of Foreign Exchange', 'https://www.safe.gov.cn/en/', 'China', 'Greater China', 'REGULATOR', 'PRIMARY', 'en', 'Foreign exchange regulation'),
+  source('China State Administration for Market Regulation', 'https://www.samr.gov.cn/', 'China', 'Greater China', 'REGULATOR', 'PRIMARY', 'zh', 'Market and product regulation'),
+  source('Guangdong Department of Commerce', 'https://com.gd.gov.cn/', 'China', 'Greater China', 'GOVERNMENT', 'PRIMARY', 'zh', 'Guangdong trade and manufacturing'),
+  source('Guangdong Emergency Management Department', 'https://yjgl.gd.gov.cn/', 'China', 'Greater China', 'WEATHER', 'PRIMARY', 'zh', 'Guangdong emergency information'),
+  source('Guangdong Statistics Bureau', 'https://stats.gd.gov.cn/', 'China', 'Greater China', 'GOVERNMENT', 'PRIMARY', 'zh', 'Guangdong industrial statistics'),
+  source('Guangzhou Customs', 'http://guangzhou.customs.gov.cn/', 'China', 'Greater China', 'REGULATOR', 'PRIMARY', 'zh', 'Guangzhou customs notices'),
+  source('Shenzhen Customs', 'http://shenzhen.customs.gov.cn/', 'China', 'Greater China', 'REGULATOR', 'PRIMARY', 'zh', 'Shenzhen customs notices'),
+  source('China Maritime Safety Administration', 'https://en.msa.gov.cn/', 'China', 'Greater China', 'LOGISTICS', 'PRIMARY', 'en', 'Maritime safety and shipping notices'),
+  source('Shanghai Shipping Exchange', 'https://en.sse.net.cn/', 'China', 'Greater China', 'MARKET', 'PRIMARY', 'en', 'Shipping markets and freight indices'),
+  source('Guangzhou Port Group', 'https://www.gzport.com/', 'China', 'Greater China', 'PORT', 'PRIMARY', 'zh', 'Guangzhou port operations'),
+  source('Shenzhen Port', 'https://jtys.sz.gov.cn/', 'China', 'Greater China', 'PORT', 'PRIMARY', 'zh', 'Shenzhen port and transport notices'),
+  source('Port of Shanghai', 'https://www.portshanghai.com.cn/', 'China', 'Greater China', 'PORT', 'PRIMARY', 'zh', 'Shanghai port operations'),
+  source('Ningbo Zhoushan Port', 'https://www.nbport.com.cn/', 'China', 'Greater China', 'PORT', 'PRIMARY', 'zh', 'Ningbo-Zhoushan port operations'),
+  source('China Ports and Harbours Association', 'https://www.port.org.cn/', 'China', 'Greater China', 'INDUSTRY', 'HIGH', 'zh', 'Port industry information'),
+  source('China National Textile and Apparel Council', 'https://www.cntac.org.cn/', 'China', 'Greater China', 'INDUSTRY', 'HIGH', 'zh', 'Textile and apparel industry'),
+  source('China Cotton Association', 'http://www.china-cotton.org/', 'China', 'Greater China', 'INDUSTRY', 'HIGH', 'zh', 'Cotton industry and markets'),
+  source('China Chemical Fiber Industry Association', 'https://www.ccfa.com.cn/', 'China', 'Greater China', 'INDUSTRY', 'HIGH', 'zh', 'Polyester and synthetic fibres'),
+  source('China Daily Business', 'https://www.chinadaily.com.cn/business', 'China', 'Greater China', 'LOCAL_NEWS', 'HIGH', 'en', 'Business and manufacturing reporting'),
+  source('Xinhua English', 'https://english.news.cn/', 'China', 'Greater China', 'LOCAL_NEWS', 'HIGH', 'en', 'National and economic reporting'),
+  source('Caixin Global', 'https://www.caixinglobal.com/', 'China', 'Greater China', 'LOCAL_NEWS', 'HIGH', 'en', 'Business and economic reporting'),
+  source('Yicai Global', 'https://www.yicaiglobal.com/', 'China', 'Greater China', 'LOCAL_NEWS', 'HIGH', 'en', 'Business and industrial reporting'),
+  source('People’s Daily English', 'http://en.people.cn/', 'China', 'Greater China', 'LOCAL_NEWS', 'HIGH', 'en', 'National policy reporting'),
+  source('China Meteorological Administration', 'https://www.cma.gov.cn/en/', 'China', 'Greater China', 'WEATHER', 'PRIMARY', 'en', 'Weather alerts'),
+  source('China Earthquake Administration', 'https://www.cea.gov.cn/', 'China', 'Greater China', 'WEATHER', 'PRIMARY', 'zh', 'Earthquake information'),
+
+  // Myanmar: official trade, labour, infrastructure and reputable local reporting.
+  source('Myanmar Government Portal', 'https://myanmar.gov.mm/', 'Myanmar', 'Southeast Asia', 'GOVERNMENT', 'PRIMARY', 'my', 'Government notices'),
+  source('Myanmar Ministry of Commerce', 'https://commerce.gov.mm/', 'Myanmar', 'Southeast Asia', 'GOVERNMENT', 'PRIMARY', 'my', 'Trade policy and licensing'),
+  source('Myanmar Ministry of Planning and Finance', 'https://www.mopf.gov.mm/', 'Myanmar', 'Southeast Asia', 'GOVERNMENT', 'PRIMARY', 'my', 'Finance, customs and economic policy'),
+  source('Myanmar Ministry of Investment and Foreign Economic Relations', 'https://mifer.gov.mm/', 'Myanmar', 'Southeast Asia', 'GOVERNMENT', 'PRIMARY', 'en', 'Investment and international economic policy'),
+  source('Myanmar Directorate of Investment and Company Administration', 'https://www.dica.gov.mm/', 'Myanmar', 'Southeast Asia', 'REGULATOR', 'PRIMARY', 'en', 'Company and investment regulation'),
+  source('Myanmar Investment Commission', 'https://www.myanmarinvestmentcommission.gov.mm/', 'Myanmar', 'Southeast Asia', 'REGULATOR', 'PRIMARY', 'en', 'Investment approvals and policy'),
+  source('Central Bank of Myanmar', 'https://www.cbm.gov.mm/', 'Myanmar', 'Southeast Asia', 'REGULATOR', 'PRIMARY', 'en', 'Currency and financial regulation'),
+  source('Myanmar Central Statistical Organization', 'https://www.csostat.gov.mm/', 'Myanmar', 'Southeast Asia', 'GOVERNMENT', 'PRIMARY', 'en', 'Economic and industrial statistics'),
+  source('Myanmar Ministry of Labour', 'https://www.mol.gov.mm/', 'Myanmar', 'Southeast Asia', 'LABOUR', 'PRIMARY', 'my', 'Labour regulation'),
+  source('Myanmar Department of Labour', 'https://www.myanmarjob.gov.mm/', 'Myanmar', 'Southeast Asia', 'LABOUR', 'PRIMARY', 'my', 'Employment and labour notices'),
+  source('Myanmar Ministry of Industry', 'https://industry.gov.mm/', 'Myanmar', 'Southeast Asia', 'GOVERNMENT', 'PRIMARY', 'my', 'Industrial policy'),
+  source('Myanmar Ministry of Transport and Communications', 'https://www.motc.gov.mm/', 'Myanmar', 'Southeast Asia', 'LOGISTICS', 'PRIMARY', 'my', 'Transport and communications'),
+  source('Myanmar Department of Marine Administration', 'https://dma.gov.mm/', 'Myanmar', 'Southeast Asia', 'LOGISTICS', 'PRIMARY', 'en', 'Maritime notices'),
+  source('Myanma Port Authority', 'https://www.mpa.gov.mm/', 'Myanmar', 'Southeast Asia', 'PORT', 'PRIMARY', 'en', 'Port operations and notices'),
+  source('Myanmar Ministry of Electric Power', 'https://moep.gov.mm/', 'Myanmar', 'Southeast Asia', 'GOVERNMENT', 'PRIMARY', 'my', 'Power availability and policy'),
+  source('Myanmar Ministry of Energy', 'https://energy.gov.mm/', 'Myanmar', 'Southeast Asia', 'GOVERNMENT', 'PRIMARY', 'my', 'Energy policy and supply'),
+  source('Myanmar Ministry of Natural Resources and Environmental Conservation', 'https://www.monrec.gov.mm/', 'Myanmar', 'Southeast Asia', 'REGULATOR', 'PRIMARY', 'my', 'Environmental regulation'),
+  source('Myanmar Department of Disaster Management', 'https://www.ddm.gov.mm/', 'Myanmar', 'Southeast Asia', 'WEATHER', 'PRIMARY', 'my', 'Disaster response information'),
+  source('Union of Myanmar Federation of Chambers of Commerce and Industry', 'https://www.umfcci.com.mm/', 'Myanmar', 'Southeast Asia', 'INDUSTRY', 'HIGH', 'en', 'Business and manufacturing'),
+  source('Myanmar Garment Manufacturers Association', 'https://www.myanmargarments.org/', 'Myanmar', 'Southeast Asia', 'INDUSTRY', 'HIGH', 'en', 'Garment manufacturing'),
+  source('Global New Light of Myanmar', 'https://www.gnlm.com.mm/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'National and economic reporting'),
+  source('Frontier Myanmar', 'https://www.frontiermyanmar.net/en/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent regional reporting'),
+  source('The Irrawaddy', 'https://www.irrawaddy.com/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent national reporting'),
+  source('Myanmar Now English', 'https://myanmar-now.org/en/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent national reporting'),
+  source('Democratic Voice of Burma English', 'https://english.dvb.no/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent national reporting'),
+  source('Mizzima News', 'https://eng.mizzima.com/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'National and regional reporting'),
+
+  // Global and cross-border intelligence: authorities, industry bodies and disaster feeds.
+  source('International Labour Organization News', 'https://www.ilo.org/resource/news', null, null, 'LABOUR', 'PRIMARY', 'en', 'International labour standards'),
+  source('ILO Better Work Bangladesh', 'https://betterwork.org/bangladesh/', 'Bangladesh', 'South Asia', 'LABOUR', 'PRIMARY', 'en', 'Garment labour and factory conditions'),
+  source('UN Trade and Development', 'https://unctad.org/news', null, null, 'TRADE', 'PRIMARY', 'en', 'Trade and shipping analysis'),
+  source('World Bank Trade', 'https://www.worldbank.org/en/topic/trade', null, null, 'TRADE', 'PRIMARY', 'en', 'Trade and development data'),
+  source('International Monetary Fund News', 'https://www.imf.org/en/News', null, null, 'MARKET', 'PRIMARY', 'en', 'Macroeconomic conditions'),
+  source('OECD Trade', 'https://www.oecd.org/trade/', null, null, 'TRADE', 'PRIMARY', 'en', 'Trade policy and data'),
+  source('European Chemicals Agency', 'https://echa.europa.eu/news-and-events/news-alerts', null, 'Europe', 'REGULATOR', 'PRIMARY', 'en', 'Chemicals and PFAS regulation'),
+  source('European Environment Agency', 'https://www.eea.europa.eu/en/newsroom', null, 'Europe', 'REGULATOR', 'PRIMARY', 'en', 'Environmental policy and data'),
+  source('EU Sanctions Map', 'https://www.sanctionsmap.eu/', null, 'Europe', 'REGULATOR', 'PRIMARY', 'en', 'European sanctions'),
+  source('US Treasury OFAC', 'https://ofac.treasury.gov/recent-actions', null, null, 'REGULATOR', 'PRIMARY', 'en', 'Sanctions actions'),
+  source('US Bureau of Industry and Security', 'https://www.bis.gov/press-release', null, null, 'REGULATOR', 'PRIMARY', 'en', 'Export controls'),
+  source('Office of the United States Trade Representative', 'https://ustr.gov/about-us/policy-offices/press-office/press-releases', null, null, 'TRADE', 'PRIMARY', 'en', 'Trade policy'),
+  source('International Trade Centre News', 'https://intracen.org/news-and-events/news', null, null, 'TRADE', 'PRIMARY', 'en', 'Trade and export intelligence'),
+  source('International Chamber of Shipping', 'https://www.ics-shipping.org/news/', null, null, 'LOGISTICS', 'HIGH', 'en', 'Shipping industry'),
+  source('BIMCO News', 'https://www.bimco.org/news-insights/', null, null, 'LOGISTICS', 'HIGH', 'en', 'Shipping markets and regulation'),
+  source('FIATA News', 'https://fiata.org/news/', null, null, 'LOGISTICS', 'HIGH', 'en', 'Freight forwarding'),
+  source('IATA Cargo', 'https://www.iata.org/en/pressroom/', null, null, 'LOGISTICS', 'HIGH', 'en', 'Air cargo'),
+  source('UN Comtrade', 'https://comtradeplus.un.org/', null, null, 'TRADE', 'PRIMARY', 'en', 'Official international trade data'),
+  source('International Cotton Advisory Committee', 'https://icac.org/News', null, null, 'INDUSTRY', 'HIGH', 'en', 'Cotton markets and policy'),
+  source('Textile Exchange', 'https://textileexchange.org/news/', null, null, 'INDUSTRY', 'HIGH', 'en', 'Textile materials and sustainability'),
+  source('Better Cotton', 'https://bettercotton.org/news/', null, null, 'INDUSTRY', 'HIGH', 'en', 'Cotton supply and standards'),
+  source('ZDHC Foundation', 'https://www.roadmaptozero.com/news', null, null, 'INDUSTRY', 'HIGH', 'en', 'Textile chemical management'),
+  source('Sustainable Apparel Coalition', 'https://cascale.org/resources/news/', null, null, 'INDUSTRY', 'HIGH', 'en', 'Apparel industry sustainability'),
+  source('Apparel Impact Institute', 'https://apparelimpact.org/news/', null, null, 'INDUSTRY', 'HIGH', 'en', 'Apparel manufacturing impacts'),
+  source('UN OCHA ReliefWeb', 'https://reliefweb.int/updates', null, null, 'WEATHER', 'PRIMARY', 'en', 'Humanitarian and disaster reporting'),
+  source('Global Disaster Alert and Coordination System', 'https://www.gdacs.org/', null, null, 'WEATHER', 'PRIMARY', 'en', 'Global disaster alerts'),
+  source('NOAA National Hurricane Center', 'https://www.nhc.noaa.gov/', null, null, 'WEATHER', 'PRIMARY', 'en', 'Cyclone and storm alerts'),
+  source('Copernicus Emergency Management Service', 'https://emergency.copernicus.eu/', null, null, 'WEATHER', 'PRIMARY', 'en', 'Disaster mapping and alerts'),
+  source('NASA Earth Observatory', 'https://earthobservatory.nasa.gov/', null, null, 'WEATHER', 'PRIMARY', 'en', 'Earth and environmental observations'),
+  source('International Federation of Red Cross and Red Crescent Societies', 'https://www.ifrc.org/press-releases', null, null, 'WEATHER', 'PRIMARY', 'en', 'Disaster and humanitarian updates'),
+  source('World Food Programme News', 'https://www.wfp.org/news', null, null, 'MARKET', 'PRIMARY', 'en', 'Food, logistics and disruption'),
+
+  // Verified machine-readable feeds. These can be collected immediately.
+  {
+    name: 'GDACS Global Disaster Alerts RSS', baseUrl: 'https://www.gdacs.org/', feedUrl: 'https://www.gdacs.org/xml/rss.xml',
+    country: null, region: null, industry: 'Global physical disruption monitoring', category: 'WEATHER', reliability: 'PRIMARY', language: 'en',
+    sourceType: 'RSS', collectionEnabled: true,
+  },
+  {
+    name: 'China Daily Business RSS', baseUrl: 'https://www.chinadaily.com.cn/business', feedUrl: 'https://www.chinadaily.com.cn/rss/bizchina_rss.xml',
+    country: 'China', region: 'Greater China', industry: 'Business and manufacturing reporting', category: 'LOCAL_NEWS', reliability: 'HIGH', language: 'en',
+    sourceType: 'RSS', collectionEnabled: true,
+  },
+  {
+    name: 'NASA Breaking News RSS', baseUrl: 'https://www.nasa.gov/', feedUrl: 'https://www.nasa.gov/rss/dyn/breaking_news.rss',
+    country: null, region: null, industry: 'Environmental and Earth observation', category: 'WEATHER', reliability: 'PRIMARY', language: 'en',
+    sourceType: 'RSS', collectionEnabled: true,
+  },
+  {
+    name: 'NOAA National Hurricane Center Atom', baseUrl: 'https://www.nhc.noaa.gov/', feedUrl: 'https://www.nhc.noaa.gov/index-at.xml',
+    country: null, region: null, industry: 'Cyclone and storm disruption monitoring', category: 'WEATHER', reliability: 'PRIMARY', language: 'en',
+    sourceType: 'ATOM', collectionEnabled: true,
+  },
+];

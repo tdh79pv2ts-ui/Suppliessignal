@@ -19,6 +19,9 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:verify-migrations": "node scripts/verify-migrations.mjs",
+    "poc:validate-data": "tsx scripts/validate-poc-data.ts",
+    "poc:verify-data": "node scripts/verify-poc-data.mjs",
+    "poc:benchmark": "tsx scripts/evaluate-poc-benchmark.ts",
     "verify:start": "node scripts/verify-startup.mjs"
   },
   "devDependencies": {

@@ -15,7 +15,8 @@ PostgreSQL remains the system of record. Original article URLs and source metada
 
 - Existing customer-scoped suppliers, factories, products, materials and routes plus global ports form the factual graph.
 - Manual CRUD and explicit relationship management remain available under Supply chain.
-- The global source registry and SSRF-safe RSS/Atom collector store normalized, deduplicated `SourceArticle` records. Collection intervals support 5 minutes, 15 minutes, hourly and longer schedules; 15 minutes is the default.
+- The global source registry contains a curated public coverage universe; tenant-specific preferences determine what each workspace monitors. The SSRF-safe RSS/Atom collector stores normalized, cross-publisher-deduplicated `SourceArticle` records. The POC scheduler evaluates enabled feeds every five minutes while respecting each source interval.
+- `CustomerMonitoringTag` stores graph-derived `AUTO`, explainable `SUGGESTED`, and user-managed `CUSTOM` tags. Automatic tags are synchronized from active graph data and can be disabled but not deleted; suggestions require acceptance; custom tags can be edited, disabled, or removed.
 - `NewsRadarArticleProcessing` provides a recoverable database lease. `NewsRadarExposure` stores one deterministic customer/article/entity match with typed tenant-safe references, matched terms, confidence-as-match-specificity, a path snapshot and the original article.
 - `DailyBriefPreference` belongs to an exact user/customer membership and is disabled by default. `DailyBriefDelivery` records idempotent tenant-safe email delivery when the optional server provider is configured.
 - `DailyBrief` freezes the graph revision and supply-chain counts. `DailyBriefItem` has composite tenant-safe references to its brief and exposure. Re-generation for the same customer/date is idempotent.
@@ -25,12 +26,13 @@ PostgreSQL remains the system of record. Original article URLs and source metada
 
 The customer-facing navigation exposes Dashboard, Supply chain, News radar, Daily brief and Settings. ADMIN/REVIEWER may additionally inspect Sources and Articles. Claims, extraction, Events, exposure candidates, identities and review workflows remain available through their existing authorized APIs for backward compatibility, but are not exposed in the simplified POC frontend.
 
-The Daily Brief contains:
+The Daily Brief preview and optional delivery contain:
 
 1. top developments;
-2. potential exposures;
-3. a factual supply-chain snapshot (no change history is inferred);
-4. a watchlist.
+2. supplier/factory developments;
+3. product/material developments;
+4. logistics/trade developments;
+5. a separate watchlist section, which is empty unless separately qualifying watchlist intelligence is introduced.
 
 Every intelligence item links to the original source, publication date, deterministic relevance explanation and explicit customer graph path. It never recommends or automates an action.
 
@@ -38,7 +40,7 @@ Every intelligence item links to the original source, publication date, determin
 
 The fictional `European Electronics Manufacturer` workspace contains exactly 20 suppliers, 50 factories, 30 products, 20 materials, 15 routes and 10 route-linked ports on a clean seed. It covers electronics relationships across China, Taiwan, Vietnam, Malaysia, Indonesia, Chile, the USA, Germany and the Netherlands.
 
-The seed never creates articles or intelligence. It enables two publisher-owned feeds: the USGS Significant Earthquakes Atom feed and the World Trade Organization news RSS feed. Collection stores only feed items with an original URL, source/publisher and valid publication date. Live article counts therefore depend on publisher availability and collection time.
+The seed never creates articles or intelligence. It registers the curated BSK public-source universe and enables verified machine-readable feeds where a supported public RSS/Atom endpoint is available. Other entries remain transparent coverage references until a supported feed or API is verified. Collection stores only feed items with an original URL, source/publisher and valid publication date. Live article counts therefore depend on publisher availability and collection time.
 
 The separate BSK Fashion workspace remains based only on public BSK master data. Unknown BSK suppliers, routes and ports remain empty.
 
@@ -47,16 +49,21 @@ The separate BSK Fashion workspace remains based only on public BSK master data.
 - USGS Significant Earthquakes: `https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom`
 - World Trade Organization News: `https://www.wto.org/library/rss/latest_news_e.xml`
 
-Both are first-party publisher feeds and run on the default 15-minute collection schedule. URL/content hashes prevent repeat ingestion, collection runs record health and failures, and the SSRF-safe client pins the validated public IP through the actual request and every redirect. Feed entries without a valid publisher-owned URL, title or publication date are rejected instead of being converted into intelligence.
+Machine-readable sources run through the five-minute POC cycle. Canonical URL, publisher identity, normalized content, exact normalized headline within a bounded publication window, and content hashes prevent repeated or cross-publisher ingestion. Collection runs record health and failures, and the SSRF-safe client pins the validated public IP through the actual request and every redirect. Feed entries without a valid publisher-owned URL, title or publication date are rejected instead of being converted into intelligence.
 
-Monitoring vocabulary is derived at processing time from the customer's active supplier, factory, product, material, route, port and country data. Signal classification covers operational, logistics, geopolitical, economic, technology, trade and environmental developments. Matching remains deterministic: exact identity, exact location/country, exact material/product, exact route endpoints or exact route-port membership.
+Monitoring vocabulary is derived at processing time from the customer's active supplier, factory, product, material, route, port, location and country data. Language requirements and source recommendations follow those graph geographies. Signal classification covers operational, logistics, geopolitical, economic, technology, trade and environmental developments. Matching remains deterministic: exact identity, exact location/country plus a qualifying disruption or monitoring theme, exact material/product, exact route endpoints or exact route-port membership. A generic custom tag by itself never enters the main feed.
+
+## Verification commands
+
+- `pnpm poc:validate-data` validates source coverage, URLs, customer preferences, duplicate evidence, explanations and typed tenant-safe graph references against the configured database.
+- `pnpm poc:benchmark <dataset.json>` evaluates a human-labelled dataset of at least 100 real collected articles and reports precision, recall, false positives and false negatives. A release claim requires measured primary-feed precision of at least 95%; no score is inferred when that evidence set is unavailable.
 
 ## Scope and limitations
 
 - Matching is exact and deterministic. There is no AI/fuzzy graph matching or opaque score.
 - Match confidence describes identity/location specificity, not risk, impact or priority.
 - CSV import is omitted because functional manual input already exists and a reliable CSV mapping workflow was not necessary for this POC.
-- Only the two documented official RSS/Atom feeds are enabled by the seed. Additional feeds require ADMIN verification and activation; collection never bypasses publisher restrictions.
+- Public WEB entries provide coverage transparency but are not scraped. Only sources with a verified supported RSS/Atom endpoint are collected; collection never bypasses publisher restrictions.
 - Exact country matching is intentionally conservative in interpretation: it indicates a geographic dependency, not proven physical impact at a specific facility.
 - Outbound email delivery is optional and off by default. When configured, it sends only membership-scoped `HIGH` and `MEDIUM` items and records an idempotent delivery audit row.
 - The supply-chain snapshot is factual current state, not a fabricated change log.

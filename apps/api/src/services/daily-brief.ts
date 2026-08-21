@@ -29,6 +29,13 @@ function briefView(brief: BriefRecord) {
 }
 type BriefView = ReturnType<typeof briefView>;
 
+function briefSection(exposure: { entityType: string; topic: string }) {
+  if (['SUPPLIER', 'FACTORY'].includes(exposure.entityType)) return 'SUPPLIERS_FACTORIES';
+  if (['PRODUCT', 'MATERIAL'].includes(exposure.entityType)) return 'PRODUCTS_MATERIALS';
+  if (['ROUTE', 'PORT'].includes(exposure.entityType) || ['LOGISTICS', 'TRADE'].includes(exposure.topic)) return 'LOGISTICS_TRADE';
+  return 'TOP_DEVELOPMENTS';
+}
+
 function utcDate(value?: string): Date {
   const date = value ? new Date(`${value}T00:00:00.000Z`) : new Date();
   if (!value) date.setUTCHours(0, 0, 0, 0);
@@ -116,7 +123,7 @@ export class DailyBriefService {
           customerId,
           briefId: brief.id,
           exposureId: exposure.id,
-          section: index < 5 ? 'TOP_DEVELOPMENTS' : index < 15 ? 'POTENTIAL_EXPOSURES' : 'WATCHLIST',
+          section: briefSection(exposure),
           position: index + 1,
         })),
       });

@@ -101,6 +101,7 @@ describe.sequential('news radar with PostgreSQL', () => {
     const first = await briefService.generate(ids.customerA, date);
     const second = await briefService.generate(ids.customerA, date);
     expect(first?.items.length).toBeGreaterThanOrEqual(1);
+    expect(first?.items).toEqual(expect.arrayContaining([expect.objectContaining({ section: 'SUPPLIERS_FACTORIES' })]));
     expect(first?.items.map((item) => item.exposure.sourceArticle.originalUrl)).toContain('https://radar.example.test/fire');
     expect(second?.id).toBe(first?.id);
     expect(await db.dailyBrief.count({ where: { customerId: ids.customerA, briefDate: new Date(`${date}T00:00:00.000Z`) } })).toBe(1);

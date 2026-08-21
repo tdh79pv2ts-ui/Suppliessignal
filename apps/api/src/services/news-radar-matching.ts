@@ -26,6 +26,7 @@ export type NewsRadarGraph = {
   products: ProductNode[];
   materials: MaterialNode[];
   routes: RouteNode[];
+  monitoringTags?: Array<{ label: string; type: 'AUTO' | 'SUGGESTED' | 'CUSTOM' }>;
 };
 
 export type NewsRadarMatch = {
@@ -129,13 +130,16 @@ export function matchArticleToSupplyChain(
 ): { topics: NewsRadarTopic[]; matches: NewsRadarMatch[]; detectedTerms: string[]; detectedLocations: string[] } {
   const text = normalizeRadarText([article.title, article.excerpt, article.normalizedText, article.translatedTitle, article.translatedSummary].filter(Boolean).join(' '));
   const topics = detectNewsRadarTopics(text);
+  const monitoringTagMatches = (graph.monitoringTags ?? []).filter((tag) => containsPhrase(text, tag.label));
   const magnitudeSignal = /\bm [4-9](?: \d+)?\b/.test(text);
-  const hasDisruption = magnitudeSignal || disruptionTerms.some((term) => containsPhrase(text, term));
+  const hasDisruption = magnitudeSignal || disruptionTerms.some((term) => containsPhrase(text, term)) || monitoringTagMatches.length > 0;
   if (magnitudeSignal && !topics.includes('ENVIRONMENTAL')) topics.push('ENVIRONMENTAL');
+  if (monitoringTagMatches.length > 0 && topics.length === 0) topics.push('OPERATIONAL');
   const matches: NewsRadarMatch[] = [];
   const detectedTerms = new Set<string>();
   const detectedLocations = new Set<string>();
   if (!hasDisruption || topics.length === 0) return { topics, matches, detectedTerms: [], detectedLocations: [] };
+  monitoringTagMatches.forEach((tag) => detectedTerms.add(tag.label));
   const topic = firstTopic(topics);
 
   const supplierNameCounts = new Map<string, number>();

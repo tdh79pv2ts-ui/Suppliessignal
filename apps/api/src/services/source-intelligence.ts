@@ -338,15 +338,20 @@ export class SourceIntelligenceService {
       normalizedText,
       source.baseUrl,
     );
+    const publicationWindow = item.publishedAt ? {
+      gte: new Date(item.publishedAt.getTime() - 24 * 60 * 60 * 1000),
+      lte: new Date(item.publishedAt.getTime() + 24 * 60 * 60 * 1000),
+    } : undefined;
     const duplicate = await db.sourceArticle.findFirst({
       where: {
-        sourceId: source.id,
         OR: [
-          ...(item.externalId ? [{ externalId: item.externalId }] : []),
+          ...(item.externalId ? [{ sourceId: source.id, externalId: item.externalId }] : []),
           { urlHash: hashes.urlHash },
-          ...(normalizedText ? [{ contentHash: hashes.contentHash }] : []),
+          ...(normalizedText.length >= 20 ? [{ contentHash: hashes.contentHash }] : []),
+          ...(publicationWindow ? [{ title: { equals: item.title, mode: 'insensitive' as const }, publishedAt: publicationWindow }] : []),
         ],
       },
+      orderBy: [{ source: { reliability: 'desc' } }, { collectedAt: 'asc' }],
     });
     if (duplicate) return { created: false, article: duplicate };
     try {

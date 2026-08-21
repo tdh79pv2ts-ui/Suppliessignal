@@ -27,8 +27,8 @@ const countryRegions: Record<string, string[]> = {
 };
 const countryLanguages: Record<string, string[]> = {
   China: ['en', 'zh'],
-  Myanmar: ['en'],
-  Bangladesh: ['en'],
+  Myanmar: ['en', 'my'],
+  Bangladesh: ['bn', 'en'],
 };
 
 const unique = (values: Array<string | null | undefined>) =>

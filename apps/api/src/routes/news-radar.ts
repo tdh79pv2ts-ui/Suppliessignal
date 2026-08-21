@@ -3,15 +3,24 @@ import {
   customerParamsSchema,
   dailyBriefDateSchema,
   dailyBriefPreferenceSchema,
+  customMonitoringTagSchema,
+  monitoringTagParamsSchema,
+  monitoringTagUpdateSchema,
+  customerSourceParamsSchema,
+  customerSourcePreferenceSchema,
+  enableRecommendedSourcesSchema,
   newsRadarArticleParamsSchema,
   newsRadarExposureParamsSchema,
   newsRadarListSchema,
   type NewsRadarListInput,
   type DailyBriefPreferenceInput,
+  type CustomMonitoringTagInput,
+  type MonitoringTagUpdateInput,
 } from '@suppliesignal/shared';
 import { requireAuth, requireCustomerAccess, requireRole, type ResolveUser } from '../auth.js';
 import { newsRadarService, type NewsRadarService } from '../services/news-radar.js';
 import { dailyBriefService, type DailyBriefService } from '../services/daily-brief.js';
+import { monitoringProfileService, type MonitoringProfileService } from '../services/monitoring-profile.js';
 
 const asyncHandler = (fn: (request: Request, response: Response) => Promise<void>) =>
   (request: Request, response: Response, next: NextFunction) => void fn(request, response).catch(next);
@@ -29,6 +38,7 @@ export function createNewsRadarRouter(
   resolveUser: ResolveUser,
   service: NewsRadarService = newsRadarService,
   briefs: DailyBriefService = dailyBriefService,
+  monitoring: MonitoringProfileService = monitoringProfileService,
 ): ExpressRouter {
   const router = Router();
   router.use(requireAuth(resolveUser));
@@ -42,7 +52,31 @@ export function createNewsRadarRouter(
   }));
   router.get('/customers/:customerId/news-radar/monitoring-profile', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
-    if (params) response.json({ data: await service.monitoringProfile(params.customerId) });
+    if (params) response.json({ data: await monitoring.get(params.customerId) });
+  }));
+  router.post('/customers/:customerId/news-radar/monitoring-tags', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    const body = parse<CustomMonitoringTagInput>(customMonitoringTagSchema, request.body, response);
+    if (params && body && request.authUser) response.status(201).json({ data: await monitoring.createCustom(params.customerId, request.authUser.id, body) });
+  }));
+  router.patch('/customers/:customerId/news-radar/monitoring-tags/:tagId', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(monitoringTagParamsSchema, request.params, response);
+    const body = parse<MonitoringTagUpdateInput>(monitoringTagUpdateSchema, request.body, response);
+    if (params && body) response.json({ data: await monitoring.update(params.customerId, params.tagId, body) });
+  }));
+  router.delete('/customers/:customerId/news-radar/monitoring-tags/:tagId', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(monitoringTagParamsSchema, request.params, response);
+    if (params) response.json({ data: await monitoring.remove(params.customerId, params.tagId) });
+  }));
+  router.put('/customers/:customerId/news-radar/source-preferences/:sourceId', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerSourceParamsSchema, request.params, response);
+    const body = parse<{ enabled: boolean }>(customerSourcePreferenceSchema, request.body, response);
+    if (params && body) response.json({ data: await monitoring.setSourceEnabled(params.customerId, params.sourceId, body.enabled) });
+  }));
+  router.post('/customers/:customerId/news-radar/source-preferences/enable-recommended', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    const body = parse<{ country: string | null }>(enableRecommendedSourcesSchema, request.body, response);
+    if (params && body) response.json({ data: await monitoring.enableRecommended(params.customerId, body.country ?? undefined) });
   }));
   router.get('/customers/:customerId/relevant-articles', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);

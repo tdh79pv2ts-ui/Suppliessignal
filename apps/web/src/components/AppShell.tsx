@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   Newspaper,
   Mail,
+  Tags,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/auth';
@@ -15,6 +16,7 @@ import { useWorkspace } from '../lib/workspace';
 const baseNavigation = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
   { label: 'Supply chain', to: '/supply-chain', icon: Boxes },
+  { label: 'Monitoring', to: '/monitoring-profile', icon: Tags },
   { label: 'Sources', to: '/sources', icon: RadioTower },
   { label: 'Articles', to: '/articles', icon: Newspaper },
   { label: 'Daily Brief', to: '/daily-brief', icon: Mail },
@@ -46,7 +48,7 @@ export function AppShell() {
           </div>
         </div>
         <nav
-          className="flex gap-1 overflow-x-auto p-3 lg:block lg:space-y-1"
+          className="grid grid-cols-3 gap-1 p-3 sm:flex sm:overflow-x-auto lg:block lg:space-y-1"
           aria-label="Primary navigation"
         >
           {navigation.map(({ label, to, icon: Icon }) => (

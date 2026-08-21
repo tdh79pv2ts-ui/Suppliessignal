@@ -134,7 +134,7 @@ describe.sequential('source intelligence with PostgreSQL', () => {
       await db.sourceArticle.count({
         where: { contentHash: articles[0]!.contentHash },
       }),
-    ).toBe(2);
+    ).toBe(1);
   });
   it('records isolated failure without corrupting articles and blocks disabled sources', async () => {
     const failing = new SourceIntelligenceService(
