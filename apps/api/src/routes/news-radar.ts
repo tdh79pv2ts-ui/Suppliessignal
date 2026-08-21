@@ -2,12 +2,12 @@ import { Router, type NextFunction, type Request, type Response, type Router as 
 import {
   customerParamsSchema,
   dailyBriefDateSchema,
-  newsletterPreferenceSchema,
+  dailyBriefPreferenceSchema,
   newsRadarArticleParamsSchema,
   newsRadarExposureParamsSchema,
   newsRadarListSchema,
   type NewsRadarListInput,
-  type NewsletterPreferenceInput,
+  type DailyBriefPreferenceInput,
 } from '@suppliesignal/shared';
 import { requireAuth, requireCustomerAccess, requireRole, type ResolveUser } from '../auth.js';
 import { newsRadarService, type NewsRadarService } from '../services/news-radar.js';
@@ -35,7 +35,10 @@ export function createNewsRadarRouter(
 
   router.get('/customers/:customerId/news-radar', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
-    if (params) response.json({ data: await service.dashboard(params.customerId) });
+    if (params && request.authUser) {
+      const preference = await briefs.getPreference(params.customerId, request.authUser.id);
+      response.json({ data: await service.dashboard(params.customerId, preference.language) });
+    }
   }));
   router.get('/customers/:customerId/news-radar/monitoring-profile', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
@@ -43,7 +46,10 @@ export function createNewsRadarRouter(
   }));
   router.get('/customers/:customerId/relevant-articles', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
-    if (params) response.json({ data: await service.listRelevantArticles(params.customerId) });
+    if (params && request.authUser) {
+      const preference = await briefs.getPreference(params.customerId, request.authUser.id);
+      response.json({ data: await service.listRelevantArticles(params.customerId, preference.language) });
+    }
   }));
   router.get('/customers/:customerId/news-radar/exposures', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
@@ -63,13 +69,23 @@ export function createNewsRadarRouter(
     const body = parse(dailyBriefDateSchema, request.body, response);
     if (params && body) response.status(201).json({ data: await briefs.generate(params.customerId, body.date) });
   }));
+  router.get('/customers/:customerId/daily-brief-preference', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    if (params && request.authUser) response.json({ data: await briefs.getPreference(params.customerId, request.authUser.id) });
+  }));
+  router.put('/customers/:customerId/daily-brief-preference', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    const body = parse<DailyBriefPreferenceInput>(dailyBriefPreferenceSchema, request.body, response);
+    if (params && body && request.authUser) response.json({ data: await briefs.updatePreference(params.customerId, request.authUser.id, body) });
+  }));
+
   router.get('/customers/:customerId/newsletter-preference', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
     if (params && request.authUser) response.json({ data: await briefs.getPreference(params.customerId, request.authUser.id) });
   }));
   router.put('/customers/:customerId/newsletter-preference', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
-    const body = parse<NewsletterPreferenceInput>(newsletterPreferenceSchema, request.body, response);
+    const body = parse<DailyBriefPreferenceInput>(dailyBriefPreferenceSchema, request.body, response);
     if (params && body && request.authUser) response.json({ data: await briefs.updatePreference(params.customerId, request.authUser.id, body) });
   }));
 

@@ -32,6 +32,11 @@ export const serverEnvSchema = z
     EVENT_BATCH_SIZE: z.coerce.number().int().min(1).max(25).default(5),
     EVENT_POLL_MS: z.coerce.number().int().min(5000).default(60000),
     EVENT_MIN_CLAIM_CONFIDENCE: z.coerce.number().min(0).max(1).default(0.6),
+    ARTICLE_TRANSLATION_ENABLED: booleanString,
+    ARTICLE_TRANSLATION_MODEL: z.string().min(1).default('gpt-5-mini'),
+    DAILY_BRIEF_EMAIL_ENABLED: booleanString,
+    RESEND_API_KEY: z.string().min(1).optional(),
+    DAILY_BRIEF_FROM_EMAIL: z.string().email().optional(),
   })
   .superRefine((env, context) => {
     const productionLike =
@@ -71,6 +76,18 @@ export const serverEnvSchema = z
         code: z.ZodIssueCode.custom,
         path: ['OPENAI_API_KEY'],
         message: 'OpenAI API key is required when extraction is enabled',
+      });
+    if (env.ARTICLE_TRANSLATION_ENABLED && !env.OPENAI_API_KEY)
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['OPENAI_API_KEY'],
+        message: 'OpenAI API key is required when article translation is enabled',
+      });
+    if (env.DAILY_BRIEF_EMAIL_ENABLED && (!env.RESEND_API_KEY || !env.DAILY_BRIEF_FROM_EMAIL))
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['RESEND_API_KEY'],
+        message: 'Resend API key and from address are required when Daily Brief email is enabled',
       });
   });
 

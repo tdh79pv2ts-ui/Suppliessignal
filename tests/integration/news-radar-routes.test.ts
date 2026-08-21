@@ -33,9 +33,9 @@ describe('news radar authorization', () => {
   it('rejects unauthenticated radar access', async () => {
     expect((await request(app('CUSTOMER', [customerA], false)).get(`/api/customers/${customerA}/news-radar`)).status).toBe(401);
   });
-  it('keeps daily briefs and newsletter preferences membership-scoped', async () => {
+  it('keeps daily briefs and preferences membership-scoped', async () => {
     expect((await request(app('CUSTOMER')).get(`/api/customers/${customerA}/daily-brief`)).status).toBe(200);
-    expect((await request(app('CUSTOMER')).put(`/api/customers/${customerA}/newsletter-preference`).send({ enabled: false, deliveryTime: '08:00', timezone: 'UTC', email: 'brief@example.test' })).status).toBe(200);
+    expect((await request(app('CUSTOMER')).put(`/api/customers/${customerA}/daily-brief-preference`).send({ enabled: false, deliveryTime: '08:00', timezone: 'UTC', email: 'brief@example.test', language: 'en' })).status).toBe(200);
     expect((await request(app('CUSTOMER')).get(`/api/customers/${customerB}/daily-brief`)).status).toBe(403);
   });
 });

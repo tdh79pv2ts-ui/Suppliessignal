@@ -17,9 +17,9 @@ PostgreSQL remains the system of record. Original article URLs and source metada
 - Manual CRUD and explicit relationship management remain available under Supply chain.
 - The global source registry and SSRF-safe RSS/Atom collector store normalized, deduplicated `SourceArticle` records. Collection intervals support 5 minutes, 15 minutes, hourly and longer schedules; 15 minutes is the default.
 - `NewsRadarArticleProcessing` provides a recoverable database lease. `NewsRadarExposure` stores one deterministic customer/article/entity match with typed tenant-safe references, matched terms, confidence-as-match-specificity, a path snapshot and the original article.
-- `NewsletterPreference` belongs to an exact user/customer membership and is disabled by default.
+- `DailyBriefPreference` belongs to an exact user/customer membership and is disabled by default. `DailyBriefDelivery` records idempotent tenant-safe email delivery when the optional server provider is configured.
 - `DailyBrief` freezes the graph revision and supply-chain counts. `DailyBriefItem` has composite tenant-safe references to its brief and exposure. Re-generation for the same customer/date is idempotent.
-- The radar worker processes pending articles and generates due briefs. Email transport is deliberately not simulated; the POC delivers the brief in the application and stores an optional future delivery address/schedule.
+- The POC worker collects enabled sources, creates optional schema-validated translations, and processes pending articles in that order. The radar worker generates due briefs; optional Resend delivery is disabled unless both server configuration and user preference explicitly enable it.
 
 ## Customer experience
 
@@ -58,7 +58,7 @@ Monitoring vocabulary is derived at processing time from the customer's active s
 - CSV import is omitted because functional manual input already exists and a reliable CSV mapping workflow was not necessary for this POC.
 - Only the two documented official RSS/Atom feeds are enabled by the seed. Additional feeds require ADMIN verification and activation; collection never bypasses publisher restrictions.
 - Exact country matching is intentionally conservative in interpretation: it indicates a geographic dependency, not proven physical impact at a specific facility.
-- Outbound email delivery is not connected. Preferences and scheduled brief generation are functional; the brief is delivered in-app.
+- Outbound email delivery is optional and off by default. When configured, it sends only membership-scoped `HIGH` and `MEDIUM` items and records an idempotent delivery audit row.
 - The supply-chain snapshot is factual current state, not a fabricated change log.
 - Existing enterprise tables and authorized APIs remain intact for data safety, while their UI is inactive in this POC.
 

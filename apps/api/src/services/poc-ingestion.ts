@@ -3,6 +3,7 @@ import {
   sourceIntelligenceService,
   type SourceIntelligenceService,
 } from './source-intelligence.js';
+import { articleTranslationService, type ArticleTranslationService } from './article-translation.js';
 
 type CollectableSource = {
   id: string;
@@ -17,6 +18,7 @@ type SourceDependency = Pick<SourceIntelligenceService, 'collect'> & {
 };
 
 type RelevanceDependency = Pick<NewsRadarService, 'processPending'>;
+type TranslationDependency = Pick<ArticleTranslationService, 'translatePending'>;
 
 export type PocIngestionResult = {
   sourcesChecked: number;
@@ -27,6 +29,8 @@ export type PocIngestionResult = {
   articlesSkipped: number;
   articleFailures: number;
   relevanceMatchesCreated: number;
+  articlesTranslated: number;
+  translationFailures: number;
 };
 
 export class PocIngestionService {
@@ -34,6 +38,7 @@ export class PocIngestionService {
     private readonly sources: SourceDependency = sourceIntelligenceService,
     private readonly relevance: RelevanceDependency = newsRadarService,
     private readonly now: () => Date = () => new Date(),
+    private readonly translations: TranslationDependency = articleTranslationService,
   ) {}
 
   async runCycle(batchSize = 100): Promise<PocIngestionResult> {
@@ -64,6 +69,7 @@ export class PocIngestionService {
       }
     }
 
+    const translated = await this.translations.translatePending(batchSize);
     const processed = await this.relevance.processPending(batchSize);
     return {
       sourcesChecked: configured.items.length,
@@ -74,6 +80,8 @@ export class PocIngestionService {
       articlesSkipped: processed.skipped,
       articleFailures: processed.failed,
       relevanceMatchesCreated: processed.exposuresCreated,
+      articlesTranslated: translated.translated,
+      translationFailures: translated.failed,
     };
   }
 }

@@ -136,6 +136,13 @@ describe('server environment', () => {
     ).toBe(true);
   });
 
+  it('requires server-only provider credentials only when translation or email is enabled', () => {
+    expect(serverEnvSchema.safeParse({ ...base, ALLOW_DEV_AUTH: 'true', ARTICLE_TRANSLATION_ENABLED: 'true' }).success).toBe(false);
+    expect(serverEnvSchema.safeParse({ ...base, ALLOW_DEV_AUTH: 'true', ARTICLE_TRANSLATION_ENABLED: 'true', OPENAI_API_KEY: 'test-key' }).success).toBe(true);
+    expect(serverEnvSchema.safeParse({ ...base, ALLOW_DEV_AUTH: 'true', DAILY_BRIEF_EMAIL_ENABLED: 'true' }).success).toBe(false);
+    expect(serverEnvSchema.safeParse({ ...base, ALLOW_DEV_AUTH: 'true', DAILY_BRIEF_EMAIL_ENABLED: 'true', RESEND_API_KEY: 'server-only', DAILY_BRIEF_FROM_EMAIL: 'briefs@example.test' }).success).toBe(true);
+  });
+
   it('validates the event minimum Claim confidence at startup', () => {
     expect(
       serverEnvSchema.safeParse({

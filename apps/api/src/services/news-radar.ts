@@ -11,9 +11,10 @@ import {
 } from './news-radar-matching.js';
 
 const LEASE_MS = 2 * 60 * 1000;
+export const NEWS_RADAR_POLICY_VERSION = '2.0';
 
 const exposureInclude = {
-  sourceArticle: { include: { source: true } },
+  sourceArticle: { include: { source: true, translations: { where: { status: 'COMPLETED' as const } } } },
   supplier: true,
   factory: { include: { supplier: true } },
   product: true,
@@ -27,10 +28,12 @@ function matchData(customerId: string, articleId: string, match: NewsRadarMatch)
     customerId,
     sourceArticleId: articleId,
     matchKey: match.matchKey,
+    policyVersion: NEWS_RADAR_POLICY_VERSION,
     entityType: match.entityType,
     topic: match.topic,
     matchMethod: match.matchMethod,
     confidence: new Prisma.Decimal(match.confidence),
+    relevanceLevel: match.relevanceLevel,
     reason: match.reason,
     matchedTerms: match.matchedTerms,
     pathSnapshot: match.pathSnapshot,
@@ -50,7 +53,7 @@ export class NewsRadarService {
     const [companies, locations, sources] = await Promise.all([
       db.company.findMany({ where: { customerId, active: true } }),
       db.location.findMany({ where: { customerId, active: true } }),
-      db.source.findMany({ where: { active: true } }),
+      db.source.findMany(),
     ]);
     const profile = buildRegionalProfile({ customerId, companies, locations, ...graph });
     return {
@@ -73,17 +76,17 @@ export class NewsRadarService {
     };
   }
 
-  async dashboard(customerId: string) {
+  async dashboard(customerId: string, preferredLanguage = 'en') {
     const [graph, matches, articleCount, articlesToday, latestRun, allSources, recentRuns, companies, locations] = await Promise.all([
       this.graph(customerId),
-      db.newsRadarExposure.findMany({ where: { customerId }, include: exposureInclude, orderBy: { sourceArticle: { discoveredAt: 'desc' } }, take: 100 }),
-      db.newsRadarExposure.findMany({ where: { customerId }, distinct: ['sourceArticleId'], select: { sourceArticleId: true } }),
+      db.newsRadarExposure.findMany({ where: { customerId, policyVersion: NEWS_RADAR_POLICY_VERSION, relevanceLevel: { in: ['HIGH', 'MEDIUM'] } }, include: exposureInclude, orderBy: { sourceArticle: { discoveredAt: 'desc' } }, take: 100 }),
+      db.newsRadarExposure.findMany({ where: { customerId, policyVersion: NEWS_RADAR_POLICY_VERSION, relevanceLevel: { in: ['HIGH', 'MEDIUM'] } }, distinct: ['sourceArticleId'], select: { sourceArticleId: true } }),
       db.newsRadarExposure.findMany({
-        where: { customerId, sourceArticle: { discoveredAt: { gte: new Date(new Date().setUTCHours(0, 0, 0, 0)) } } },
+        where: { customerId, policyVersion: NEWS_RADAR_POLICY_VERSION, relevanceLevel: { in: ['HIGH', 'MEDIUM'] }, sourceArticle: { discoveredAt: { gte: new Date(new Date().setUTCHours(0, 0, 0, 0)) } } },
         distinct: ['sourceArticleId'], select: { sourceArticleId: true },
       }),
       db.sourceCollectionRun.findFirst({ orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
-      db.source.findMany({ where: { active: true }, include: { collectionRuns: { take: 1, orderBy: { startedAt: 'desc' } }, _count: { select: { articles: true } } }, orderBy: { name: 'asc' } }),
+      db.source.findMany({ include: { collectionRuns: { take: 1, orderBy: { startedAt: 'desc' } }, _count: { select: { articles: true } } }, orderBy: { name: 'asc' } }),
       db.sourceCollectionRun.findMany({ take: 8, orderBy: { startedAt: 'desc' }, include: { source: { select: { name: true } } } }),
       db.company.findMany({ where: { customerId, active: true } }),
       db.location.findMany({ where: { customerId, active: true } }),
@@ -93,7 +96,7 @@ export class NewsRadarService {
       .map((source) => ({ source, recommendation: sourceRecommendation(monitoringProfile, source) }))
       .filter((item): item is typeof item & { recommendation: NonNullable<typeof item.recommendation> } => Boolean(item.recommendation))
       .sort((a, b) => a.recommendation.priority - b.recommendation.priority || a.source.name.localeCompare(b.source.name));
-    const relevantArticles = groupRelevantArticles(matches);
+    const relevantArticles = groupRelevantArticles(matches, preferredLanguage);
     return {
       customer: graph.customer,
       counts: {
@@ -108,20 +111,22 @@ export class NewsRadarService {
       },
       latestCollection: latestRun,
       monitoringProfile,
-      sources: sources.map(({ source, recommendation }) => ({ id: source.id, name: source.name, type: source.sourceType, url: source.feedUrl ?? source.baseUrl, country: source.country, region: source.region, industry: source.industry, category: source.category, language: source.language, lastChecked: source.lastCollectedAt, lastSuccessfulSync: source.lastSuccessfulCollectionAt, status: sourceHealth(source), articleCount: source._count.articles, recommendation, lastRun: source.collectionRuns[0] ?? null })),
+      sources: sources.map(({ source, recommendation }) => ({ id: source.id, name: source.name, type: source.sourceType, url: source.feedUrl ?? source.baseUrl, country: source.country, region: source.region, industry: source.industry, category: source.category, language: source.language, lastChecked: source.lastCollectedAt, lastSuccessfulSync: source.lastSuccessfulCollectionAt, status: sourceStatus(source), health: sourceHealth(source), articleCount: source._count.articles, recommendation, lastRun: source.collectionRuns[0] ?? null })),
       recentUpdates: recentRuns,
       articles: relevantArticles,
     };
   }
 
-  async listRelevantArticles(customerId: string) {
-    const matches = await db.newsRadarExposure.findMany({ where: { customerId }, include: exposureInclude, orderBy: { sourceArticle: { discoveredAt: 'desc' } }, take: 500 });
-    return { items: groupRelevantArticles(matches) };
+  async listRelevantArticles(customerId: string, preferredLanguage = 'en') {
+    const matches = await db.newsRadarExposure.findMany({ where: { customerId, policyVersion: NEWS_RADAR_POLICY_VERSION, relevanceLevel: { in: ['HIGH', 'MEDIUM'] } }, include: exposureInclude, orderBy: { sourceArticle: { discoveredAt: 'desc' } }, take: 500 });
+    return { items: groupRelevantArticles(matches, preferredLanguage) };
   }
 
   async listExposures(customerId: string, input: NewsRadarListInput) {
     const where: Prisma.NewsRadarExposureWhereInput = {
       customerId,
+      policyVersion: NEWS_RADAR_POLICY_VERSION,
+      relevanceLevel: { in: ['HIGH', 'MEDIUM'] },
       ...(input.topic ? { topic: input.topic } : {}),
       ...(input.entityType ? { entityType: input.entityType } : {}),
       ...(input.search ? { OR: [
@@ -137,29 +142,30 @@ export class NewsRadarService {
   }
 
   async getExposure(customerId: string, exposureId: string) {
-    const exposure = await db.newsRadarExposure.findFirst({ where: { id: exposureId, customerId }, include: exposureInclude });
+    const exposure = await db.newsRadarExposure.findFirst({ where: { id: exposureId, customerId, policyVersion: NEWS_RADAR_POLICY_VERSION, relevanceLevel: { in: ['HIGH', 'MEDIUM'] } }, include: exposureInclude });
     if (!exposure) throw new ServiceError('NEWS_RADAR_EXPOSURE_NOT_FOUND', 'News radar exposure not found', 404);
     return exposure;
   }
 
-  async processArticle(articleId: string) {
+  async processArticle(articleId: string, customerGraphs?: Array<{ customerId: string; graph: NewsRadarGraph }>) {
     const ownerToken = crypto.randomUUID();
     const leaseExpiresAt = new Date(Date.now() + LEASE_MS);
     const claimed = await db.$queryRaw<Array<{ source_article_id: string }>>(Prisma.sql`
       INSERT INTO "news_radar_article_processing" (
-        "source_article_id", "status", "owner_token", "lease_expires_at",
+        "source_article_id", "status", "policy_version", "owner_token", "lease_expires_at",
         "attempt_count", "topics", "detected_terms", "detected_locations", "updated_at"
       ) VALUES (
-        ${articleId}::uuid, 'RUNNING', ${ownerToken}::uuid, ${leaseExpiresAt},
+        ${articleId}::uuid, 'RUNNING', ${NEWS_RADAR_POLICY_VERSION}, ${ownerToken}::uuid, ${leaseExpiresAt},
         1, ARRAY[]::"NewsRadarTopic"[], ARRAY[]::text[], ARRAY[]::text[], NOW()
       )
       ON CONFLICT ("source_article_id") DO UPDATE SET
-        "status" = 'RUNNING', "owner_token" = EXCLUDED."owner_token",
+        "status" = 'RUNNING', "policy_version" = EXCLUDED."policy_version", "owner_token" = EXCLUDED."owner_token",
         "lease_expires_at" = EXCLUDED."lease_expires_at",
         "attempt_count" = "news_radar_article_processing"."attempt_count" + 1,
         "completed_at" = NULL, "error_code" = NULL, "error_message" = NULL,
         "updated_at" = NOW()
       WHERE "news_radar_article_processing"."status" = 'FAILED'
+         OR "news_radar_article_processing"."policy_version" <> ${NEWS_RADAR_POLICY_VERSION}
          OR ("news_radar_article_processing"."status" = 'RUNNING'
              AND "news_radar_article_processing"."lease_expires_at" < NOW())
       RETURNING "source_article_id"
@@ -169,25 +175,33 @@ export class NewsRadarService {
       throw new ServiceError(state?.status === 'COMPLETED' ? 'NEWS_RADAR_ALREADY_PROCESSED' : 'NEWS_RADAR_ALREADY_RUNNING', 'Article radar processing is already complete or active', 409);
     }
     try {
-      const article = await db.sourceArticle.findUnique({ where: { id: articleId }, include: { source: true } });
+      const article = await db.sourceArticle.findUnique({ where: { id: articleId }, include: { source: true, translations: { where: { targetLanguage: 'en', status: 'COMPLETED' } } } });
       if (!article) throw new ServiceError('ARTICLE_NOT_FOUND', 'Source article not found', 404);
-      const customers = await db.customer.findMany({ select: { id: true } });
+      const graphs = customerGraphs ?? await this.customerGraphs();
       const topics = new Set<NewsRadarTopic>();
       const terms = new Set<string>();
       const locations = new Set<string>();
       let exposuresCreated = 0;
-      for (const customer of customers) {
-        const result = matchArticleToSupplyChain({ ...article, country: article.country ?? article.source.country, region: article.region ?? article.source.region }, await this.graph(customer.id));
+      for (const { customerId, graph } of graphs) {
+        const english = article.translations[0];
+        const result = matchArticleToSupplyChain({
+          title: article.title,
+          excerpt: article.excerpt,
+          normalizedText: article.normalizedText,
+          translatedTitle: english?.translatedTitle ?? null,
+          translatedSummary: english?.translatedSummary ?? null,
+        }, graph);
         result.topics.forEach((value) => topics.add(value));
         result.detectedTerms.forEach((value) => terms.add(value));
         result.detectedLocations.forEach((value) => locations.add(value));
         for (const match of result.matches) {
-          const data = matchData(customer.id, articleId, match);
-          const existing = await db.newsRadarExposure.findUnique({ where: { customerId_sourceArticleId_matchKey: { customerId: customer.id, sourceArticleId: articleId, matchKey: match.matchKey } }, select: { id: true } });
+          const data = matchData(customerId, articleId, match);
+          const key = { customerId, sourceArticleId: articleId, matchKey: match.matchKey, policyVersion: NEWS_RADAR_POLICY_VERSION };
+          const existing = await db.newsRadarExposure.findUnique({ where: { customerId_sourceArticleId_matchKey_policyVersion: key }, select: { id: true } });
           await db.newsRadarExposure.upsert({
-            where: { customerId_sourceArticleId_matchKey: { customerId: customer.id, sourceArticleId: articleId, matchKey: match.matchKey } },
+            where: { customerId_sourceArticleId_matchKey_policyVersion: key },
             create: data,
-            update: { topic: data.topic, matchMethod: data.matchMethod, confidence: data.confidence, reason: data.reason, matchedTerms: data.matchedTerms, pathSnapshot: data.pathSnapshot },
+            update: { topic: data.topic, matchMethod: data.matchMethod, confidence: data.confidence, relevanceLevel: data.relevanceLevel, reason: data.reason, matchedTerms: data.matchedTerms, pathSnapshot: data.pathSnapshot },
           });
           if (!existing) exposuresCreated++;
         }
@@ -204,15 +218,17 @@ export class NewsRadarService {
     const articles = await db.sourceArticle.findMany({
       where: { OR: [
         { newsRadarProcessing: null },
+        { newsRadarProcessing: { policyVersion: { not: NEWS_RADAR_POLICY_VERSION } } },
         { newsRadarProcessing: { status: 'FAILED' } },
         { newsRadarProcessing: { status: 'RUNNING', leaseExpiresAt: { lt: new Date() } } },
       ] },
       select: { id: true }, orderBy: { discoveredAt: 'asc' }, take: Math.min(100, Math.max(1, limit)),
     });
+    const customerGraphs = articles.length > 0 ? await this.customerGraphs() : [];
     const result = { articlesFound: articles.length, processed: 0, skipped: 0, failed: 0, exposuresCreated: 0 };
     for (const article of articles) {
       try {
-        const processed = await this.processArticle(article.id);
+        const processed = await this.processArticle(article.id, customerGraphs);
         result.processed++; result.exposuresCreated += processed.exposuresCreated;
       } catch (error) {
         if (error instanceof ServiceError && ['NEWS_RADAR_ALREADY_RUNNING', 'NEWS_RADAR_ALREADY_PROCESSED'].includes(error.code)) result.skipped++;
@@ -220,6 +236,11 @@ export class NewsRadarService {
       }
     }
     return result;
+  }
+
+  private async customerGraphs() {
+    const customers = await db.customer.findMany({ select: { id: true } });
+    return Promise.all(customers.map(async ({ id }) => ({ customerId: id, graph: await this.graph(id) })));
   }
 
   private async graph(customerId: string): Promise<NewsRadarGraph> {
@@ -237,16 +258,20 @@ export class NewsRadarService {
 }
 
 type ExposureRow = Prisma.NewsRadarExposureGetPayload<{ include: typeof exposureInclude }>;
-function groupRelevantArticles(rows: ExposureRow[]) {
-  const grouped = new Map<string, { id: string; title: string; summary: string | null; url: string; publishedAt: Date | null; discoveredAt: Date; category: string; country: string | null; region: string | null; language: string | null; source: { name: string; status: string }; relatedSuppliers: string[]; relatedFactories: string[]; relatedProducts: string[]; relatedMaterials: string[]; relatedCountries: string[]; relatedLocations: string[]; reasons: string[] }>();
+function groupRelevantArticles(rows: ExposureRow[], preferredLanguage = 'en') {
+  const grouped = new Map<string, { id: string; title: string; summary: string | null; originalTitle: string; originalSummary: string | null; translated: boolean; relevance: 'HIGH' | 'MEDIUM'; url: string; publishedAt: Date | null; discoveredAt: Date; category: string; country: string | null; region: string | null; language: string | null; source: { name: string; status: string }; relatedSuppliers: string[]; relatedFactories: string[]; relatedProducts: string[]; relatedMaterials: string[]; relatedCountries: string[]; relatedLocations: string[]; reasons: string[] }>();
   for (const row of rows) {
+    const originalSummary = row.sourceArticle.excerpt ?? row.sourceArticle.normalizedText?.slice(0, 500) ?? null;
+    const translation = row.sourceArticle.translations.find((value) => value.targetLanguage === preferredLanguage);
     const existing = grouped.get(row.sourceArticleId) ?? {
-      id: row.sourceArticle.id, title: row.sourceArticle.title, summary: row.sourceArticle.excerpt ?? row.sourceArticle.normalizedText?.slice(0, 500) ?? null,
+      id: row.sourceArticle.id, title: translation?.translatedTitle ?? row.sourceArticle.title, summary: translation?.translatedSummary ?? originalSummary,
+      originalTitle: row.sourceArticle.title, originalSummary, translated: Boolean(translation), relevance: row.relevanceLevel as 'HIGH' | 'MEDIUM',
       url: row.sourceArticle.originalUrl, publishedAt: row.sourceArticle.publishedAt, discoveredAt: row.sourceArticle.discoveredAt,
       category: row.sourceArticle.source.category, source: { name: row.sourceArticle.source.name, status: row.sourceArticle.status },
       country: row.sourceArticle.country ?? row.sourceArticle.source.country, region: row.sourceArticle.region ?? row.sourceArticle.source.region, language: row.sourceArticle.language,
       relatedSuppliers: [], relatedFactories: [], relatedProducts: [], relatedMaterials: [], relatedCountries: [], relatedLocations: [], reasons: [],
     };
+    if (row.relevanceLevel === 'HIGH') existing.relevance = 'HIGH';
     if (row.supplier && !existing.relatedSuppliers.includes(row.supplier.name)) existing.relatedSuppliers.push(row.supplier.name);
     if (row.factory && !existing.relatedFactories.includes(row.factory.name)) existing.relatedFactories.push(row.factory.name);
     if (row.factory?.country && !existing.relatedCountries.includes(row.factory.country)) existing.relatedCountries.push(row.factory.country);
@@ -257,6 +282,11 @@ function groupRelevantArticles(rows: ExposureRow[]) {
     grouped.set(row.sourceArticleId, existing);
   }
   return [...grouped.values()].sort((a, b) => (b.publishedAt ?? b.discoveredAt).getTime() - (a.publishedAt ?? a.discoveredAt).getTime());
+}
+
+function sourceStatus(source: Parameters<typeof sourceHealth>[0]) {
+  if (!source.active || !source.collectionEnabled) return 'DISABLED';
+  return source.consecutiveFailures > 0 ? 'ERROR' : 'ACTIVE';
 }
 
 export const newsRadarService = new NewsRadarService();

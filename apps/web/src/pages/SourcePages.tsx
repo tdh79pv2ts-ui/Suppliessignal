@@ -10,6 +10,7 @@ type Source = {
   feedUrl?: string | null;
   country?: string | null;
   region?: string | null;
+  industry?: string | null;
   language?: string | null;
   category: string;
   reliability: string;
@@ -57,6 +58,7 @@ const fields = [
   'feedUrl',
   'country',
   'region',
+  'industry',
   'language',
 ] as const;
 function sourceBody(form: HTMLFormElement) {
@@ -68,6 +70,7 @@ function sourceBody(form: HTMLFormElement) {
     feedUrl: d.get('feedUrl') || null,
     country: d.get('country') || null,
     region: d.get('region') || null,
+    industry: d.get('industry') || null,
     language: d.get('language') || null,
     category: d.get('category'),
     reliability: d.get('reliability'),
@@ -107,6 +110,7 @@ function SourceForm({
           'category',
           [
             'NEWS',
+            'LOCAL_NEWS',
             'GOVERNMENT',
             'REGULATOR',
             'INDUSTRY',
@@ -115,6 +119,8 @@ function SourceForm({
             'LABOUR',
             'TRADE',
             'WEATHER',
+            'MARKET',
+            'SUPPLIER',
             'OTHER',
           ],
         ],

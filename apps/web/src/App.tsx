@@ -21,7 +21,7 @@ import {
   SourceDetailPage,
   SourcesPage,
 } from './pages/SourcePages';
-import { PocArticlesPage, PocSourcesPage } from './pages/PocPages';
+import { PocArticlesPage, PocDailyBriefPage, PocSourcesPage } from './pages/PocPages';
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -117,7 +117,7 @@ export function App() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/news-radar" element={<Navigate to="/dashboard" replace />} />
         <Route path="/news-radar/exposures/:id" element={<Navigate to="/articles" replace />} />
-        <Route path="/daily-brief" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/daily-brief" element={<PocDailyBriefPage />} />
         <Route path="/supply-chain" element={<SupplyChainOverview />} />
         {entityKinds.flatMap((kind) => [
           <Route

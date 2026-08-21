@@ -34,6 +34,7 @@ export type NewsRadarMatch = {
   topic: NewsRadarTopic;
   matchMethod: NewsRadarMatchMethod;
   confidence: number;
+  relevanceLevel: 'HIGH' | 'MEDIUM' | 'LOW';
   reason: string;
   matchedTerms: string[];
   pathSnapshot: Array<{
@@ -52,13 +53,13 @@ export type NewsRadarMatch = {
 };
 
 const topicTerms: Record<NewsRadarTopic, string[]> = {
-  GEOPOLITICAL: ['war', 'conflict', 'political instability', 'border restriction', 'civil unrest', 'election'],
-  ECONOMIC: ['currency', 'inflation', 'interest rate', 'commodity price', 'energy price', 'labor cost', 'labour cost', 'downturn', 'shortage'],
-  OPERATIONAL: ['fire', 'explosion', 'shutdown', 'production halt', 'bankruptcy', 'cyber incident', 'strike', 'labor dispute', 'labour dispute'],
-  LOGISTICS: ['port closure', 'shipping delay', 'shipping disruption', 'freight disruption', 'route disruption', 'port congestion', 'border closure'],
-  ENVIRONMENTAL: ['flood', 'flooding', 'earthquake', 'storm', 'cyclone', 'typhoon', 'wildfire', 'drought'],
-  TRADE: ['sanction', 'tariff', 'trade restriction', 'export control', 'export restriction', 'import restriction', 'customs restriction'],
-  TECHNOLOGY: ['semiconductor restriction', 'technology export control', 'cyber incident', 'cyberattack', 'cyber attack'],
+  GEOPOLITICAL: ['war', 'conflict', 'political instability', 'border restriction', 'civil unrest', 'oorlog', 'conflit', 'guerra', '战争', '戦争', '전쟁', 'chiến tranh'],
+  ECONOMIC: ['currency', 'inflation', 'interest rate', 'commodity price', 'energy price', 'labor cost', 'labour cost', 'downturn', 'shortage', 'inflatie', 'inflation', 'pénurie', 'escasez', '短缺', '不足', '부족', 'thiếu hụt'],
+  OPERATIONAL: ['fire', 'explosion', 'shutdown', 'production halt', 'bankruptcy', 'cyber incident', 'strike', 'labor dispute', 'labour dispute', 'brand', 'staking', 'streik', 'incendie', 'grève', 'incendio', 'huelga', '火灾', '罢工', '火災', 'ストライキ', '화재', '파업', 'hỏa hoạn', 'đình công'],
+  LOGISTICS: ['port closure', 'shipping delay', 'shipping disruption', 'freight disruption', 'route disruption', 'port congestion', 'border closure', 'havensluiting', 'lieferverzögerung', 'fermeture du port', 'cierre del puerto', '港口关闭', '港湾閉鎖', '항만 폐쇄', 'đóng cửa cảng'],
+  ENVIRONMENTAL: ['flood', 'flooding', 'earthquake', 'storm', 'cyclone', 'typhoon', 'wildfire', 'drought', 'overstroming', 'aardbeving', 'überschwemmung', 'erdbeben', 'inondation', 'séisme', 'inundación', 'terremoto', '洪水', '地震', '洪水', '지진', 'lũ lụt', 'động đất'],
+  TRADE: ['sanction', 'tariff', 'trade restriction', 'export control', 'export restriction', 'import restriction', 'customs restriction', 'sanctie', 'exportbeperking', 'sanktion', 'exportkontrolle', 'sanction commerciale', 'contrôle des exportations', 'sanción', 'control de exportaciones', '制裁', '出口管制', '制裁', '輸出規制', '제재', '수출 통제', 'trừng phạt', 'kiểm soát xuất khẩu'],
+  TECHNOLOGY: ['semiconductor restriction', 'technology export control', 'cyber incident', 'cyberattack', 'cyber attack', 'halfgeleider', 'halbleiter', 'semi-conducteur', 'semiconductor', '半导体', '半導体', '반도체', 'chất bán dẫn'],
 };
 
 const disruptionTerms = [
@@ -67,16 +68,34 @@ const disruptionTerms = [
   'earthquake', 'storm', 'cyclone', 'typhoon', 'bankruptcy', 'sanction', 'tariff',
   'export control', 'cyber incident', 'congestion', 'explosion',
   'cyberattack', 'cyber attack',
+  'overstroming', 'aardbeving', 'staking', 'streik', 'überschwemmung', 'erdbeben',
+  'grève', 'inondation', 'séisme', 'huelga', 'inundación', 'terremoto',
+  '火灾', '罢工', '港口关闭', '洪水', '地震', '制裁', '出口管制',
+  '火災', 'ストライキ', '港湾閉鎖', '制裁', '輸出規制',
+  '화재', '파업', '항만 폐쇄', '지진', '제재', '수출 통제',
+  'hỏa hoạn', 'đình công', 'đóng cửa cảng', 'lũ lụt', 'động đất', 'trừng phạt',
 ];
+
+const countryAliases: Record<string, string[]> = {
+  china: ['china', '中国', '中国', '중국', 'trung quốc'],
+  myanmar: ['myanmar', 'burma', 'မြန်မာ'],
+  bangladesh: ['bangladesh', 'বাংলাদেশ'],
+};
 
 export function normalizeRadarText(value: string): string {
   return value
     .normalize('NFKD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim()
     .replace(/\s+/g, ' ');
+}
+
+function matchingLocationTerm(text: string, value?: string | null): string | null {
+  if (!value) return null;
+  const aliases = countryAliases[normalizeRadarText(value)] ?? [value];
+  return aliases.find((alias) => containsPhrase(text, alias)) ?? null;
 }
 
 function containsPhrase(text: string, value?: string | null): boolean {
@@ -105,10 +124,10 @@ function pushUnique(matches: NewsRadarMatch[], match: NewsRadarMatch) {
 }
 
 export function matchArticleToSupplyChain(
-  article: { title: string; excerpt?: string | null; normalizedText?: string | null; country?: string | null; region?: string | null },
+  article: { title: string; excerpt?: string | null; normalizedText?: string | null; translatedTitle?: string | null; translatedSummary?: string | null },
   graph: NewsRadarGraph,
 ): { topics: NewsRadarTopic[]; matches: NewsRadarMatch[]; detectedTerms: string[]; detectedLocations: string[] } {
-  const text = normalizeRadarText([article.title, article.excerpt, article.normalizedText].filter(Boolean).join(' '));
+  const text = normalizeRadarText([article.title, article.excerpt, article.normalizedText, article.translatedTitle, article.translatedSummary].filter(Boolean).join(' '));
   const topics = detectNewsRadarTopics(text);
   const magnitudeSignal = /\bm [4-9](?: \d+)?\b/.test(text);
   const hasDisruption = magnitudeSignal || disruptionTerms.some((term) => containsPhrase(text, term));
@@ -139,6 +158,7 @@ export function matchArticleToSupplyChain(
       matchKey: `supplier:${supplier.id}`,
       entityType: 'SUPPLIER', topic, matchMethod: method,
       confidence: legal ? 0.97 : location ? 0.9 : 0.84,
+      relevanceLevel: 'HIGH',
       reason: `${method === 'NAME_AND_LOCATION' ? 'Supplier name and location' : 'Supplier identity'} occur exactly in disruptive coverage.`,
       matchedTerms: terms,
       pathSnapshot: [customerStep(graph), { nodeType: 'SUPPLIER', id: supplier.id, label: supplier.name, relationship: 'explicit supplier' }],
@@ -150,11 +170,12 @@ export function matchArticleToSupplyChain(
   for (const factory of graph.factories) factoryNameCounts.set(normalizeRadarText(factory.name), (factoryNameCounts.get(normalizeRadarText(factory.name)) ?? 0) + 1);
   for (const factory of graph.factories) {
     const named = containsPhrase(text, factory.name) && factoryNameCounts.get(normalizeRadarText(factory.name)) === 1;
-    const cityCountry = containsPhrase(text, factory.city) && containsPhrase(text, factory.country);
-    const countryOnly = !cityCountry && (containsPhrase(text, factory.country) || article.country === factory.country);
+    const countryTerm = matchingLocationTerm(text, factory.country);
+    const cityCountry = containsPhrase(text, factory.city) && Boolean(countryTerm);
+    const countryOnly = !cityCountry && Boolean(countryTerm);
     if (!named && !cityCountry && !countryOnly) continue;
     const method: NewsRadarMatchMethod = named ? 'UNIQUE_EXACT_NAME' : cityCountry ? 'EXACT_CITY_COUNTRY' : 'EXACT_COUNTRY';
-    const terms = named ? [factory.name] : [factory.city, factory.country].filter(Boolean) as string[];
+    const terms = named ? [factory.name] : cityCountry ? [factory.city!, countryTerm!] : [countryTerm!];
     terms.forEach((term) => { detectedTerms.add(term); detectedLocations.add(term); });
     const path: NewsRadarMatch['pathSnapshot'] = [customerStep(graph)];
     if (factory.supplier) path.push({ nodeType: 'SUPPLIER' as const, id: factory.supplier.id, label: factory.supplier.name, relationship: 'explicit supplier' });
@@ -163,7 +184,8 @@ export function matchArticleToSupplyChain(
       matchKey: `factory:${factory.id}`,
       entityType: 'FACTORY', topic, matchMethod: method,
       confidence: named ? 0.92 : cityCountry ? 0.78 : 0.64,
-      reason: named ? 'Factory name occurs exactly in disruptive coverage.' : cityCountry ? 'Disruptive factory coverage names the exact city and country.' : article.country === factory.country ? `The regional source covers ${factory.country}, where this verified factory is located.` : 'Disruptive coverage names the factory country.',
+      relevanceLevel: named ? 'HIGH' : 'MEDIUM',
+      reason: named ? 'Factory name occurs exactly in disruptive coverage.' : cityCountry ? 'Disruptive coverage names the exact factory city and country.' : 'Disruptive coverage explicitly names the factory country.',
       matchedTerms: terms, pathSnapshot: path, factoryId: factory.id,
     });
   }
@@ -174,6 +196,7 @@ export function matchArticleToSupplyChain(
     pushUnique(matches, {
       matchKey: `product:${product.id}`, entityType: 'PRODUCT', topic,
       matchMethod: 'UNIQUE_EXACT_NAME', confidence: 0.82,
+      relevanceLevel: 'HIGH',
       reason: 'Product name occurs exactly in disruptive coverage.', matchedTerms: [product.name],
       pathSnapshot: [customerStep(graph), { nodeType: 'PRODUCT', id: product.id, label: product.name, relationship: 'explicit product' }],
       productId: product.id,
@@ -191,6 +214,7 @@ export function matchArticleToSupplyChain(
     pushUnique(matches, {
       matchKey: `material:${material.id}`, entityType: 'MATERIAL', topic,
       matchMethod: 'UNIQUE_EXACT_NAME', confidence: 0.84,
+      relevanceLevel: 'HIGH',
       reason: 'Material or commodity name occurs exactly in disruptive coverage.', matchedTerms: [term],
       pathSnapshot: path, materialId: material.id,
     });
@@ -205,6 +229,7 @@ export function matchArticleToSupplyChain(
       pushUnique(matches, {
         matchKey: `route:${route.id}`, entityType: 'ROUTE', topic,
         matchMethod: named ? 'UNIQUE_EXACT_NAME' : 'ROUTE_ENDPOINTS', confidence: named ? 0.9 : 0.86,
+        relevanceLevel: 'HIGH',
         reason: named ? 'Route name occurs exactly in disruptive coverage.' : 'Both explicit route endpoints occur in disruptive coverage.',
         matchedTerms: terms,
         pathSnapshot: [customerStep(graph), { nodeType: 'ROUTE', id: route.id, label: route.name, relationship: 'explicit route' }],
@@ -220,11 +245,24 @@ export function matchArticleToSupplyChain(
       pushUnique(matches, {
         matchKey: `port:${route.id}:${routePort.port.id}`, entityType: 'PORT', topic,
         matchMethod: code ? 'EXACT_PORT_CODE' : 'EXACT_PORT_NAME', confidence: code ? 0.97 : 0.93,
+        relevanceLevel: 'HIGH',
         reason: 'A named port is explicitly present on this customer route.', matchedTerms: [term],
         pathSnapshot: [customerStep(graph), { nodeType: 'ROUTE', id: route.id, label: route.name, relationship: 'explicit route' }, { nodeType: 'PORT', id: routePort.port.id, label: routePort.port.name, relationship: `route port sequence ${routePort.sequence}` }],
         routePortRouteId: route.id, portId: routePort.port.id,
       });
     }
+  }
+
+  for (const product of graph.products) {
+    if (!product.category || !containsPhrase(text, product.category) || matches.some((match) => match.productId === product.id)) continue;
+    pushUnique(matches, {
+      matchKey: `industry:product:${product.id}`, entityType: 'PRODUCT', topic,
+      matchMethod: 'INDUSTRY_CONTEXT', confidence: 0.4, relevanceLevel: 'LOW',
+      reason: 'Coverage mentions only the product industry; this low-specificity context is excluded from the main overview.',
+      matchedTerms: [product.category],
+      pathSnapshot: [customerStep(graph), { nodeType: 'PRODUCT', id: product.id, label: product.name, relationship: 'explicit product category' }],
+      productId: product.id,
+    });
   }
 
   return { topics, matches, detectedTerms: [...detectedTerms].filter(Boolean).sort(), detectedLocations: [...detectedLocations].filter(Boolean).sort() };

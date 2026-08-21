@@ -6,6 +6,7 @@ import {
   RadioTower,
   ShieldCheck,
   Newspaper,
+  Mail,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/auth';
@@ -16,6 +17,7 @@ const baseNavigation = [
   { label: 'Supply chain', to: '/supply-chain', icon: Boxes },
   { label: 'Sources', to: '/sources', icon: RadioTower },
   { label: 'Articles', to: '/articles', icon: Newspaper },
+  { label: 'Daily Brief', to: '/daily-brief', icon: Mail },
 ];
 
 export function AppShell() {

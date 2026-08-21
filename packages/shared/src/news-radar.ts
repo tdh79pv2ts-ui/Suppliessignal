@@ -19,6 +19,18 @@ export const newsRadarEntityTypes = [
   'PORT',
 ] as const;
 
+export const intelligenceLanguages = [
+  'en',
+  'nl',
+  'de',
+  'fr',
+  'es',
+  'zh',
+  'ja',
+  'ko',
+  'vi',
+] as const;
+
 export const newsRadarListSchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
@@ -45,16 +57,20 @@ function validTimezone(value: string): boolean {
   }
 }
 
-export const newsletterPreferenceSchema = z.object({
+export const dailyBriefPreferenceSchema = z.object({
   enabled: z.boolean(),
   deliveryTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/),
   timezone: z.string().trim().min(1).max(100).refine(validTimezone, 'Invalid IANA timezone'),
   email: z.string().trim().email().max(320),
+  language: z.enum(intelligenceLanguages),
 });
+
+export const newsletterPreferenceSchema = dailyBriefPreferenceSchema;
 
 export const dailyBriefDateSchema = z.object({
   date: z.string().date().optional(),
 });
 
 export type NewsRadarListInput = z.infer<typeof newsRadarListSchema>;
-export type NewsletterPreferenceInput = z.infer<typeof newsletterPreferenceSchema>;
+export type DailyBriefPreferenceInput = z.infer<typeof dailyBriefPreferenceSchema>;
+export type NewsletterPreferenceInput = DailyBriefPreferenceInput;

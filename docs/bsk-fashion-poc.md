@@ -40,11 +40,13 @@ Five enabled feeds provide real external articles:
 - USGS Significant Earthquakes Atom: <https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/significant_month.atom>
 - World Trade Organization News RSS: <https://www.wto.org/library/rss/latest_news_e.xml>
 
-The first three are country/regional sources. USGS and WTO remain lower-priority global fallbacks. Original article URLs and source metadata are retained. Six additional authoritative organizations are registered as country-specific recommendations but remain collection-disabled because no supported, verified RSS/Atom configuration is available.
+The first three are country/regional sources. USGS and WTO remain lower-priority global fallbacks. Original article URLs and source metadata are retained. Additional government, customs, regional, logistics, Reuters, Financial Times, and Associated Press pages are registered as visible recommendations but remain collection-disabled where no supported, verified RSS/Atom configuration is available.
 
-The deterministic relevance vocabulary includes the four facility names and their countries/cities, the six product categories, and the five published materials. A disruptive item from a country-specific source may use that verified source country as location context. The customer article view still shows only articles that match explicit BSK graph data; it does not create Claims, Events, exposure conclusions, or scores.
+The deterministic relevance vocabulary includes the four facility names and their countries/cities, the six product categories, and the five published materials. Source country metadata helps recommend sources but never proves an article affects that country: the article text or a validated translation must contain the exact graph/location evidence. `HIGH` direct and `MEDIUM` explicit geography matches appear in the customer view; `LOW` industry context does not. The matcher does not create Claims, Events, exposure conclusions, or scores.
 
-The dedicated POC worker runs every five minutes. Each cycle collects due enabled feeds, lets the existing URL/content hashes reject duplicates, persists source status/errors, and only then refreshes article relevance. No synthetic articles are seeded; the first successful worker cycle supplies real articles.
+The dedicated POC worker runs every five minutes. Each cycle collects due enabled feeds, lets the existing URL/content hashes reject duplicates, persists source status/errors, optionally creates schema-validated translations, and only then refreshes article relevance. English, Dutch, German, French, Spanish, Chinese, Japanese, Korean, and Vietnamese are supported preference/translation languages. Original text and URLs remain unchanged and can be opened from the translated view.
+
+Daily Brief email is disabled by default. With an explicitly configured server-side provider, an opted-in membership receives one idempotent customer-scoped brief containing only `HIGH` and `MEDIUM` items and their original sources. No synthetic articles are seeded; the first successful worker cycle supplies real articles.
 
 ## Deliberately absent
 

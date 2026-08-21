@@ -3,10 +3,15 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { db } from '../../packages/db/src/index';
 import { NewsRadarService } from '../../apps/api/src/services/news-radar';
 import { DailyBriefService } from '../../apps/api/src/services/daily-brief';
+import { ArticleTranslationService } from '../../apps/api/src/services/article-translation';
+import { FakeArticleTranslationProvider } from '../../packages/ai/src/translation';
+import { FakeEmailProvider } from '../../apps/api/src/services/email';
 
 const service = new NewsRadarService();
 const briefService = new DailyBriefService();
-const ids = { customerA: randomUUID(), customerB: randomUUID(), user: randomUUID(), supplier: randomUUID(), source: randomUUID(), article: randomUUID() };
+const email = new FakeEmailProvider();
+const deliveryBriefService = new DailyBriefService(email, 'briefs@example.test');
+const ids = { customerA: randomUUID(), customerB: randomUUID(), user: randomUUID(), supplier: randomUUID(), source: randomUUID(), article: randomUUID(), irrelevantArticle: randomUUID(), foreignArticle: randomUUID() };
 
 describe.sequential('news radar with PostgreSQL', () => {
   beforeAll(async () => {
@@ -16,13 +21,16 @@ describe.sequential('news radar with PostgreSQL', () => {
     await db.supplier.create({ data: { id: ids.supplier, customerId: ids.customerA, name: 'Distinct Components Group', country: 'Vietnam', city: 'Hanoi', tier: 'TIER_1', criticality: 'HIGH' } });
     await db.source.create({ data: { id: ids.source, name: 'Radar fixture source', sourceType: 'MANUAL', baseUrl: 'https://radar.example.test', category: 'NEWS', reliability: 'HIGH' } });
     await db.sourceArticle.create({ data: { id: ids.article, sourceId: ids.source, originalUrl: 'https://radar.example.test/fire', title: 'Fire disrupts Distinct Components Group production in Vietnam', normalizedText: 'Fire disrupts Distinct Components Group production in Vietnam.', contentHash: `content-${ids.article}`, urlHash: `url-${ids.article}`, status: 'NORMALIZED' } });
+    await db.sourceArticle.create({ data: { id: ids.irrelevantArticle, sourceId: ids.source, originalUrl: 'https://radar.example.test/unrelated', title: 'Sports club wins a local final', normalizedText: 'A sports club won its local final.', contentHash: `content-${ids.irrelevantArticle}`, urlHash: `url-${ids.irrelevantArticle}`, status: 'NORMALIZED' } });
+    await db.sourceArticle.create({ data: { id: ids.foreignArticle, sourceId: ids.source, originalUrl: 'https://radar.example.test/zh-fire', title: '越南工厂发生火灾', excerpt: '生产中断。', language: 'zh', contentHash: `content-${ids.foreignArticle}`, urlHash: `url-${ids.foreignArticle}`, status: 'NORMALIZED' } });
   });
   afterAll(async () => {
+    await db.dailyBriefDelivery.deleteMany({ where: { customerId: { in: [ids.customerA, ids.customerB] } } });
     await db.dailyBrief.deleteMany({ where: { customerId: { in: [ids.customerA, ids.customerB] } } });
-    await db.newsletterPreference.deleteMany({ where: { userId: ids.user } });
-    await db.newsRadarExposure.deleteMany({ where: { sourceArticleId: ids.article } });
-    await db.newsRadarArticleProcessing.deleteMany({ where: { sourceArticleId: ids.article } });
-    await db.sourceArticle.deleteMany({ where: { id: ids.article } });
+    await db.dailyBriefPreference.deleteMany({ where: { userId: ids.user } });
+    await db.newsRadarExposure.deleteMany({ where: { sourceArticleId: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle] } } });
+    await db.newsRadarArticleProcessing.deleteMany({ where: { sourceArticleId: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle] } } });
+    await db.sourceArticle.deleteMany({ where: { id: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle] } } });
     await db.source.deleteMany({ where: { id: ids.source } });
     await db.supplier.deleteMany({ where: { id: ids.supplier } });
     await db.customerMembership.deleteMany({ where: { userId: ids.user } });
@@ -42,6 +50,11 @@ describe.sequential('news radar with PostgreSQL', () => {
     expect(await db.newsRadarExposure.count({ where: { sourceArticleId: ids.article, customerId: ids.customerA } })).toBe(1);
   });
 
+  it('filters an article with no explicit disruption and customer-graph relationship', async () => {
+    await expect(service.processArticle(ids.irrelevantArticle)).resolves.toMatchObject({ exposuresCreated: 0 });
+    expect(await db.newsRadarExposure.count({ where: { sourceArticleId: ids.irrelevantArticle } })).toBe(0);
+  });
+
   it('returns one customer-scoped relevant article with its original evidence URL', async () => {
     const result = await service.listRelevantArticles(ids.customerA);
     expect(result.items).toHaveLength(1);
@@ -59,6 +72,7 @@ describe.sequential('news radar with PostgreSQL', () => {
       deliveryTime: '00:00',
       timezone: 'UTC',
       email: 'brief@example.test',
+      language: 'en',
     });
     await briefService.generateDue(new Date('2035-01-02T12:00:00Z'));
     expect(await db.dailyBrief.count({
@@ -66,16 +80,40 @@ describe.sequential('news radar with PostgreSQL', () => {
     })).toBe(0);
   });
 
+  it('stores a validated translation without overwriting original foreign-language evidence', async () => {
+    const translations = new ArticleTranslationService(new FakeArticleTranslationProvider({
+      title: 'Fire disrupts Distinct Components Group production in Vietnam',
+      summary: 'Production was disrupted.',
+    }));
+    await expect(translations.translate(ids.foreignArticle, 'en')).resolves.toMatchObject({ status: 'COMPLETED', targetLanguage: 'en' });
+    await expect(service.processArticle(ids.foreignArticle)).resolves.toMatchObject({ exposuresCreated: 1 });
+    const original = await db.sourceArticle.findUniqueOrThrow({ where: { id: ids.foreignArticle } });
+    expect(original).toMatchObject({ title: '越南工厂发生火灾', excerpt: '生产中断。', language: 'zh' });
+    await expect(service.listRelevantArticles(ids.customerA, 'en')).resolves.toEqual(expect.objectContaining({
+      items: expect.arrayContaining([expect.objectContaining({ id: ids.foreignArticle, translated: true, originalTitle: '越南工厂发生火灾' })]),
+    }));
+  });
+
   it('stores membership-bound preferences and generates one idempotent evidence-linked daily brief', async () => {
-    await expect(briefService.updatePreference(ids.customerA, ids.user, { enabled: true, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'brief@example.test' })).resolves.toMatchObject({ enabled: true });
+    await expect(deliveryBriefService.updatePreference(ids.customerA, ids.user, { enabled: true, deliveryTime: '08:00', timezone: 'UTC', email: 'brief@example.test', language: 'en' })).resolves.toMatchObject({ enabled: true });
     const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
     const date = tomorrow.toISOString().slice(0, 10);
     const first = await briefService.generate(ids.customerA, date);
     const second = await briefService.generate(ids.customerA, date);
-    expect(first?.items).toHaveLength(1);
-    expect(first?.items[0]?.exposure.sourceArticle.originalUrl).toBe('https://radar.example.test/fire');
+    expect(first?.items.length).toBeGreaterThanOrEqual(1);
+    expect(first?.items.map((item) => item.exposure.sourceArticle.originalUrl)).toContain('https://radar.example.test/fire');
     expect(second?.id).toBe(first?.id);
     expect(await db.dailyBrief.count({ where: { customerId: ids.customerA, briefDate: new Date(`${date}T00:00:00.000Z`) } })).toBe(1);
+  });
+
+  it('delivers an idempotent tenant-scoped email containing only relevant customer items', async () => {
+    const tomorrow = new Date(); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1); tomorrow.setUTCHours(12, 0, 0, 0);
+    await expect(deliveryBriefService.generateDue(tomorrow)).resolves.toMatchObject({ emailsSent: 1, emailFailures: 0 });
+    await expect(deliveryBriefService.generateDue(tomorrow)).resolves.toMatchObject({ emailsSent: 0 });
+    expect(email.messages).toHaveLength(1);
+    expect(email.messages[0]?.html).toContain('Distinct Components Group');
+    expect(email.messages[0]?.html).not.toContain('Radar Customer B');
+    expect(await db.dailyBriefDelivery.count({ where: { customerId: ids.customerA, status: 'SENT' } })).toBe(1);
   });
 
   it('database rejects a Customer B brief item referencing a Customer A exposure', async () => {
@@ -86,7 +124,7 @@ describe.sequential('news radar with PostgreSQL', () => {
 
   it('database rejects a Customer B exposure referencing Customer A supplier', async () => {
     await expect(db.newsRadarExposure.create({ data: {
-      customerId: ids.customerB, sourceArticleId: ids.article, matchKey: 'cross-tenant', entityType: 'SUPPLIER', topic: 'OPERATIONAL', matchMethod: 'UNIQUE_EXACT_NAME', confidence: 0.8, reason: 'Invalid cross-tenant fixture', matchedTerms: ['Distinct Components Group'], pathSnapshot: [], supplierId: ids.supplier,
+      customerId: ids.customerB, sourceArticleId: ids.article, matchKey: 'cross-tenant', policyVersion: '2.0', entityType: 'SUPPLIER', topic: 'OPERATIONAL', matchMethod: 'UNIQUE_EXACT_NAME', confidence: 0.8, relevanceLevel: 'HIGH', reason: 'Invalid cross-tenant fixture', matchedTerms: ['Distinct Components Group'], pathSnapshot: [], supplierId: ids.supplier,
     } })).rejects.toBeDefined();
   });
 });

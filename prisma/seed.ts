@@ -156,11 +156,21 @@ async function main() {
 
   const sources = [
     ['BGMEA', 'https://www.bgmea.com.bd/', 'Bangladesh', 'South Asia', 'Apparel and garment manufacturing', 'INDUSTRY', 'MEDIUM'],
+    ['Bangladesh Trade Portal', 'https://www.bangladeshtradeportal.gov.bd/', 'Bangladesh', 'South Asia', 'Trade regulation and export procedures', 'GOVERNMENT', 'PRIMARY'],
+    ['Bangladesh Customs', 'https://bangladeshcustoms.gov.bd/', 'Bangladesh', 'South Asia', 'Customs and import/export procedures', 'GOVERNMENT', 'PRIMARY'],
     ['Myanmar National Trade Portal', 'https://www.myanmartradeportal.gov.mm/', 'Myanmar', 'Southeast Asia', 'Trade and manufacturing', 'TRADE', 'PRIMARY'],
     ['Myanmar Customs', 'https://www.customs.gov.mm/', 'Myanmar', 'Southeast Asia', 'Customs and logistics', 'GOVERNMENT', 'PRIMARY'],
+    ['Myanmar Ministry of Commerce', 'https://commerce.gov.mm/', 'Myanmar', 'Southeast Asia', 'Trade policy and market access', 'GOVERNMENT', 'PRIMARY'],
+    ['Myanmar Ministry of Industry', 'https://industry.gov.mm/', 'Myanmar', 'Southeast Asia', 'Manufacturing and industrial policy', 'GOVERNMENT', 'PRIMARY'],
     ['Guangzhou Municipal Government', 'https://www.gz.gov.cn/', 'China', 'Greater China', 'Manufacturing and regulation', 'GOVERNMENT', 'PRIMARY'],
+    ['General Administration of Customs of China', 'https://www.customs.gov.cn/', 'China', 'Greater China', 'Customs and import/export regulation', 'GOVERNMENT', 'PRIMARY'],
     ['European Commission Trade', 'https://policy.trade.ec.europa.eu/', null, 'Europe', 'Trade regulation', 'REGULATOR', 'PRIMARY'],
     ['International Maritime Organization', 'https://www.imo.org/', null, null, 'Maritime logistics', 'LOGISTICS', 'PRIMARY'],
+    ['World Customs Organization', 'https://www.wcoomd.org/en/media.aspx', null, null, 'Customs and trade facilitation', 'TRADE', 'PRIMARY'],
+    ['ASEAN Secretariat News', 'https://asean.org/category/news/', null, 'Southeast Asia', 'Regional trade and policy', 'GOVERNMENT', 'PRIMARY'],
+    ['Reuters Asia Pacific', 'https://www.reuters.com/world/asia-pacific/', null, null, 'Regional business and logistics news', 'NEWS', 'HIGH'],
+    ['Financial Times Supply Chain', 'https://www.ft.com/supply-chain', null, null, 'Global supply-chain business news', 'MARKET', 'HIGH'],
+    ['Associated Press Asia Pacific', 'https://apnews.com/hub/asia-pacific', null, null, 'Regional public-interest news', 'NEWS', 'HIGH'],
   ] as const;
   for (const [name, baseUrl, country, region, industry, category, reliability] of sources) {
     const existing = await prisma.source.findFirst({ where: { name } });
@@ -179,7 +189,7 @@ async function main() {
     { id: 'a1000000-0000-4000-8000-000000000002', name: 'World Trade Organization News', sourceType: 'RSS' as const, baseUrl: 'https://www.wto.org/', feedUrl: 'https://www.wto.org/library/rss/latest_news_e.xml', industry: 'Global trade policy', category: 'TRADE' as const },
   ];
   for (const source of realNewsSources) await prisma.source.upsert({ where: { id: source.id }, update: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 5 }, create: { ...source, reliability: 'PRIMARY', active: true, collectionEnabled: true, collectionIntervalMinutes: 5 } });
-  await prisma.newsletterPreference.upsert({ where: { userId_customerId: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id } }, update: {}, create: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId: customer.id, enabled: false, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'customer@demo.suppliesignal.local' } });
+  for (const customerId of [customer.id, bskCustomer.id]) await prisma.dailyBriefPreference.upsert({ where: { userId_customerId: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId } }, update: {}, create: { userId: 'f30a7d12-ecf6-4f9d-a73d-c2fd12f06e3f', customerId, enabled: false, deliveryTime: '08:00', timezone: 'Europe/Amsterdam', email: 'customer@demo.suppliesignal.local', language: 'en' } });
 }
 
 main().catch((error: unknown) => { console.error(error); process.exitCode = 1; }).finally(async () => { await prisma.$disconnect(); });

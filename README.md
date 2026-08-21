@@ -68,13 +68,21 @@ pnpm --filter @suppliesignal/api start:exposure-worker # Event/customer-graph re
 pnpm --filter @suppliesignal/api start:news-radar-worker # direct Article/customer-graph POC matching
 ```
 
+## BSK intelligence configuration
+
+The five-minute POC worker checks only enabled RSS/Atom sources, preserves each publisher URL, translates before matching when translation is enabled, and then applies policy-versioned deterministic relevance. Direct verified graph matches are `HIGH`, explicit location/country dependencies are `MEDIUM`, and broad industry-only context is `LOW`. The customer dashboard and Daily Brief include only `HIGH` and `MEDIUM` results. A source's country is discovery metadata, not proof that every article concerns that country.
+
+The monitoring profile supports English (`en`), Dutch (`nl`), German (`de`), French (`fr`), Spanish (`es`), Chinese (`zh`), Japanese (`ja`), Korean (`ko`), and Vietnamese (`vi`). Set `ARTICLE_TRANSLATION_ENABLED=true`, a server-only `OPENAI_API_KEY`, and optionally `ARTICLE_TRANSLATION_MODEL` to create schema-validated translations. Original titles, summaries, languages, and URLs are never overwritten. Translation is disabled safely when no provider is configured.
+
+Daily email is disabled by default. To activate it, set `DAILY_BRIEF_EMAIL_ENABLED=true`, server-only `RESEND_API_KEY`, and `DAILY_BRIEF_FROM_EMAIL`. Users then opt in per customer membership with an address, IANA timezone, delivery time, and supported language. Delivery rows have tenant-safe database references and are idempotent per preference and brief. Never expose `OPENAI_API_KEY`, `RESEND_API_KEY`, or `SUPABASE_SERVICE_ROLE_KEY` through a `VITE_` variable.
+
 ## Production configuration
 
 Use a managed PostgreSQL database, set `NODE_ENV=production` plus an explicit `APP_ENV`, configure exact `WEB_ORIGIN`, and supply secrets through the deployment platform. `ALLOW_DEV_AUTH` must remain `false`. Build with `pnpm build`, migrate with `pnpm db:deploy`, and start the API with `pnpm --filter @suppliesignal/api start`. Serve `apps/web/dist` from a static host and route it to the API configured by `VITE_API_URL`. See the staging runbook for the exact Vercel, Railway, and Supabase configuration.
 
 ## Phase status
 
-The active POC prioritizes regional sources for China, Myanmar, and Bangladesh, then uses global trade/weather feeds only as fallbacks. It matches SourceArticles directly to explicit customer graph data without Claims, extraction, Events, candidate/identity/review workflows, scoring, alerts, Daily Briefs, or automated decisions. `start:poc-worker` runs the ordered fetch → deduplicate/store → relevance-update cycle every five minutes. Source failures and collection counters are persisted and visible in the dashboard.
+The active POC prioritizes regional sources for China, Myanmar, and Bangladesh, then uses global trade/weather feeds only as fallbacks. It matches SourceArticles directly to explicit customer graph data without Claims, extraction, Events, candidate/identity/review workflows, scoring, alerts, or automated decisions. `start:poc-worker` runs the ordered fetch → deduplicate/store → optional translation → relevance-update cycle every five minutes. Source failures and collection counters are persisted and visible in the dashboard. The optional Daily Brief contains only evidence-linked `HIGH` and `MEDIUM` items from the user's membership-scoped customer.
 
 The seed also contains a [BSK Fashion public-data workspace](docs/bsk-fashion-poc.md) with four published facilities, public product categories, and public material names. Unknown suppliers, routes, ports, and graph relationships are intentionally left empty.
 

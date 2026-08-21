@@ -17,7 +17,7 @@ const match = (text: string, value = graph()) => matchArticleToSupplyChain({ tit
 
 describe('deterministic supply-chain news radar matching', () => {
   it('matches a unique exact supplier name in disruptive coverage', () => {
-    expect(match('Fire disrupts Foxconn Precision Components production')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'SUPPLIER', matchMethod: 'UNIQUE_EXACT_NAME' })]));
+    expect(match('Fire disrupts Foxconn Precision Components production')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'SUPPLIER', matchMethod: 'UNIQUE_EXACT_NAME', relevanceLevel: 'HIGH' })]));
   });
 
   it('does not match a same-name supplier without a disambiguating location', () => {
@@ -33,14 +33,11 @@ describe('deterministic supply-chain news radar matching', () => {
     expect(match('Flooding disrupts factories in Vietnam')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY' })]));
   });
 
-  it('uses a regional source country as deterministic location context', () => {
-    const result = matchArticleToSupplyChain(
-      { title: 'Flooding disrupts industrial production', country: 'Vietnam', region: 'Southeast Asia' },
+  it('does not treat source metadata as evidence that an article affects the source country', () => {
+    expect(matchArticleToSupplyChain(
+      { title: 'Flooding disrupts industrial production' },
       graph(),
-    ).matches;
-    expect(result).toEqual(expect.arrayContaining([
-      expect.objectContaining({ entityType: 'FACTORY', factoryId: 'factory-a', matchMethod: 'EXACT_COUNTRY' }),
-    ]));
+    ).matches).toHaveLength(0);
   });
 
   it('matches a real-feed-shaped earthquake magnitude to an exact country dependency', () => {
@@ -71,5 +68,28 @@ describe('deterministic supply-chain news radar matching', () => {
 
   it('does not match an unrelated country', () => {
     expect(match('Flooding disrupts factories in Thailand').filter((item) => item.entityType === 'FACTORY')).toHaveLength(0);
+  });
+
+  it('classifies an explicit customer country match as MEDIUM', () => {
+    expect(match('Flooding disrupts factories in Vietnam')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'FACTORY', relevanceLevel: 'MEDIUM', matchMethod: 'EXACT_COUNTRY' }),
+    ]));
+  });
+
+  it('keeps industry-only context LOW so it can be excluded from the overview', () => {
+    const value = graph({ products: [{ id: 'product-a', name: 'Battery Module', category: 'Bags and accessories' }] });
+    expect(match('Strike disrupts the bags and accessories industry', value)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'PRODUCT', relevanceLevel: 'LOW', matchMethod: 'INDUSTRY_CONTEXT' }),
+    ]));
+  });
+
+  it('matches translated evidence while retaining deterministic exact terms', () => {
+    const result = matchArticleToSupplyChain({
+      title: '工場に関する現地報道',
+      translatedTitle: 'Fire disrupts Foxconn Precision Components production',
+    }, graph()).matches;
+    expect(result).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'SUPPLIER', relevanceLevel: 'HIGH' }),
+    ]));
   });
 });

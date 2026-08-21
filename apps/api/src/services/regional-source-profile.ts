@@ -17,12 +17,18 @@ export type RegionalProfile = {
   locations: string[];
   logisticsDependencies: string[];
   monitoringKeywords: string[];
+  searchLanguages: string[];
 };
 
 const countryRegions: Record<string, string[]> = {
   China: ['Greater China', 'East Asia'],
   Myanmar: ['Southeast Asia'],
   Bangladesh: ['South Asia'],
+};
+const countryLanguages: Record<string, string[]> = {
+  China: ['en', 'zh'],
+  Myanmar: ['en'],
+  Bangladesh: ['en'],
 };
 
 const unique = (values: Array<string | null | undefined>) =>
@@ -70,17 +76,18 @@ export function buildRegionalProfile(input: {
     locations,
     logisticsDependencies,
     monitoringKeywords: unique([...suppliers, ...factories, ...products, ...materials, ...locations, ...countries, ...logisticsDependencies]),
+    searchLanguages: unique(['en', ...countries.flatMap((country) => countryLanguages[country] ?? [])]),
   };
 }
 
 type ProfileSource = Pick<Source, 'country' | 'region' | 'category' | 'reliability' | 'collectionEnabled'>;
 const officialCategories = new Set<SourceCategory>(['GOVERNMENT', 'REGULATOR', 'PORT']);
-const globalFallbackCategories = new Set<SourceCategory>(['TRADE', 'WEATHER', 'LOGISTICS']);
+const globalFallbackCategories = new Set<SourceCategory>(['NEWS', 'TRADE', 'WEATHER', 'LOGISTICS', 'MARKET']);
 
 export function sourceRecommendation(profile: RegionalProfile, source: ProfileSource) {
   const countryMatch = Boolean(source.country && profile.countries.includes(source.country));
   const regionMatch = Boolean(source.region && profile.regions.includes(source.region));
-  const globalFallback = !source.country && !source.region && source.collectionEnabled && globalFallbackCategories.has(source.category);
+  const globalFallback = !source.country && !source.region && globalFallbackCategories.has(source.category);
   if (!countryMatch && !regionMatch && !globalFallback) return null;
   const official = source.reliability === ('PRIMARY' satisfies SourceReliability) || officialCategories.has(source.category);
   const priority = official ? 1 : source.category === 'INDUSTRY' ? 2 : source.category === 'LOCAL_NEWS' ? 3 : 4;

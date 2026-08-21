@@ -26,6 +26,7 @@ describe('BSK regional source profile', () => {
     expect(profile.regions).toEqual(['East Asia', 'Greater China', 'South Asia', 'Southeast Asia']);
     expect(profile.monitoringKeywords).toEqual(expect.arrayContaining(['Guangzhou Factory', 'Cumilla EPZ', 'Handbag', 'Nylon']));
     expect(profile.suppliers).toEqual([]);
+    expect(profile.searchLanguages).toEqual(['en', 'zh']);
   });
 
   it('prioritizes official country sources and excludes unrelated sources', () => {

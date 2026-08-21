@@ -1,9 +1,17 @@
 import { db, type Prisma } from '@suppliesignal/db';
-import type { NewsletterPreferenceInput } from '@suppliesignal/shared';
+import type { DailyBriefPreferenceInput } from '@suppliesignal/shared';
 import { ServiceError } from './errors.js';
+import { ResendEmailProvider, type EmailProvider } from './email.js';
+import { NEWS_RADAR_POLICY_VERSION } from './news-radar.js';
 
 const exposureInclude = {
-  sourceArticle: { include: { source: true } },
+  sourceArticle: { include: { source: true, translations: { where: { status: 'COMPLETED' as const } } } },
+  supplier: true,
+  factory: true,
+  product: true,
+  material: true,
+  route: true,
+  routePort: { include: { port: true } },
 } satisfies Prisma.NewsRadarExposureInclude;
 
 const briefInclude = {
@@ -16,9 +24,10 @@ const briefInclude = {
 
 type BriefRecord = Prisma.DailyBriefGetPayload<{ include: typeof briefInclude }>;
 
-function briefView(brief: BriefRecord | null) {
-  return brief ? { ...brief, graphRevision: brief.graphRevision.toString() } : null;
+function briefView(brief: BriefRecord) {
+  return { ...brief, graphRevision: brief.graphRevision.toString() };
 }
+type BriefView = ReturnType<typeof briefView>;
 
 function utcDate(value?: string): Date {
   const date = value ? new Date(`${value}T00:00:00.000Z`) : new Date();
@@ -38,17 +47,24 @@ function localParts(now: Date, timezone: string) {
 }
 
 export class DailyBriefService {
+  constructor(
+    private readonly emailProvider: EmailProvider | null = configuredEmailProvider(),
+    private readonly fromEmail = process.env.DAILY_BRIEF_FROM_EMAIL ?? '',
+  ) {}
+
   async getPreference(customerId: string, userId: string) {
     const [preference, user] = await Promise.all([
-      db.newsletterPreference.findUnique({ where: { userId_customerId: { userId, customerId } } }),
+      db.dailyBriefPreference.findUnique({ where: { userId_customerId: { userId, customerId } } }),
       db.user.findUnique({ where: { id: userId }, select: { email: true } }),
     ]);
     if (!user) throw new ServiceError('USER_NOT_FOUND', 'Application user not found', 404);
-    return preference ?? { userId, customerId, enabled: false, deliveryTime: '08:00', timezone: 'UTC', email: user.email };
+    return { ...(preference ?? { userId, customerId, enabled: false, deliveryTime: '08:00', timezone: 'UTC', email: user.email, language: 'en' }), emailConfigured: Boolean(this.emailProvider && this.fromEmail) };
   }
 
-  async updatePreference(customerId: string, userId: string, input: NewsletterPreferenceInput) {
-    return db.newsletterPreference.upsert({
+  async updatePreference(customerId: string, userId: string, input: DailyBriefPreferenceInput) {
+    if (input.enabled && (!this.emailProvider || !this.fromEmail))
+      throw new ServiceError('EMAIL_NOT_CONFIGURED', 'Daily Brief email delivery is not configured', 503);
+    return db.dailyBriefPreference.upsert({
       where: { userId_customerId: { userId, customerId } },
       create: { userId, customerId, ...input },
       update: input,
@@ -56,7 +72,8 @@ export class DailyBriefService {
   }
 
   async latest(customerId: string) {
-    return briefView(await db.dailyBrief.findFirst({ where: { customerId }, include: briefInclude, orderBy: [{ briefDate: 'desc' }, { generatedAt: 'desc' }] }));
+    const brief = await db.dailyBrief.findFirst({ where: { customerId }, include: briefInclude, orderBy: [{ briefDate: 'desc' }, { generatedAt: 'desc' }] });
+    return brief ? briefView(brief) : null;
   }
 
   async generate(customerId: string, dateValue?: string) {
@@ -69,6 +86,8 @@ export class DailyBriefService {
       db.newsRadarExposure.findMany({
         where: {
           customerId,
+          policyVersion: NEWS_RADAR_POLICY_VERSION,
+          relevanceLevel: { in: ['HIGH', 'MEDIUM'] },
           OR: [
             { sourceArticle: { publishedAt: { gte: windowStart, lt: windowEnd } } },
             { sourceArticle: { publishedAt: null, discoveredAt: { gte: windowStart, lt: windowEnd } } },
@@ -106,19 +125,66 @@ export class DailyBriefService {
   }
 
   async generateDue(now = new Date()) {
-    const preferences = await db.newsletterPreference.findMany({ where: { enabled: true }, select: { customerId: true, timezone: true, deliveryTime: true } });
-    const generated: string[] = [];
+    const preferences = await db.dailyBriefPreference.findMany({ where: { enabled: true } });
+    const generated = new Map<string, BriefView>();
+    let emailsSent = 0;
+    let emailFailures = 0;
     for (const preference of preferences) {
       const local = localParts(now, preference.timezone);
       if (local.time < preference.deliveryTime) continue;
       const briefDate = utcDate(local.date);
       const existing = await db.dailyBrief.findUnique({ where: { customerId_briefDate: { customerId: preference.customerId, briefDate } }, select: { id: true } });
-      if (existing || generated.includes(preference.customerId)) continue;
-      await this.generate(preference.customerId, local.date);
-      generated.push(preference.customerId);
+      const brief = existing
+        ? await db.dailyBrief.findUniqueOrThrow({ where: { id: existing.id }, include: briefInclude }).then(briefView)
+        : generated.get(preference.customerId) ?? await this.generate(preference.customerId, local.date);
+      generated.set(preference.customerId, brief);
+      const delivered = await db.dailyBriefDelivery.findUnique({ where: { preferenceId_briefId: { preferenceId: preference.id, briefId: brief.id } } });
+      if (delivered?.status === 'SENT') continue;
+      const delivery = await db.dailyBriefDelivery.upsert({
+        where: { preferenceId_briefId: { preferenceId: preference.id, briefId: brief.id } },
+        create: { preferenceId: preference.id, briefId: brief.id, customerId: preference.customerId, userId: preference.userId, email: preference.email, language: preference.language },
+        update: { status: 'PENDING', email: preference.email, language: preference.language, errorCode: null },
+      });
+      if (!this.emailProvider || !this.fromEmail) {
+        await db.dailyBriefDelivery.update({ where: { id: delivery.id }, data: { status: 'FAILED', errorCode: 'EMAIL_NOT_CONFIGURED' } });
+        emailFailures++;
+        continue;
+      }
+      try {
+        const message = renderBriefEmail(brief, preference.language, preference.email, this.fromEmail);
+        const sent = await this.emailProvider.send(message);
+        await db.dailyBriefDelivery.update({ where: { id: delivery.id }, data: { status: 'SENT', provider: this.emailProvider.name, providerId: sent.id, sentAt: new Date() } });
+        emailsSent++;
+      } catch {
+        await db.dailyBriefDelivery.update({ where: { id: delivery.id }, data: { status: 'FAILED', provider: this.emailProvider.name, errorCode: 'EMAIL_DELIVERY_FAILED' } });
+        emailFailures++;
+      }
     }
-    return { preferencesChecked: preferences.length, briefsGenerated: generated.length, customerIds: generated };
+    return { preferencesChecked: preferences.length, briefsGenerated: generated.size, customerIds: [...generated.keys()], emailsSent, emailFailures };
   }
+}
+
+function escapeHtml(value: string) {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;').replaceAll("'", '&#39;');
+}
+
+function renderBriefEmail(brief: BriefView, language: string, to: string, from: string) {
+  const rows = brief.items.map(({ exposure }) => {
+    const translation = exposure.sourceArticle.translations.find((value) => value.targetLanguage === language);
+    const title = translation?.translatedTitle ?? exposure.sourceArticle.title;
+    const affected = exposure.supplier?.name ?? exposure.factory?.name ?? exposure.product?.name ?? exposure.material?.name ?? exposure.route?.name ?? exposure.routePort?.port.name ?? 'Supply-chain asset';
+    return `<li><strong>${escapeHtml(title)}</strong><br>Affected: ${escapeHtml(affected)}<br>Why this matters: ${escapeHtml(exposure.reason)}<br><a href="${escapeHtml(exposure.sourceArticle.originalUrl)}">${escapeHtml(exposure.sourceArticle.source.name)}</a></li>`;
+  }).join('');
+  return {
+    to,
+    from,
+    subject: `${brief.customer.name} Supply Chain Intelligence Brief`,
+    html: `<h1>${escapeHtml(brief.customer.name)} Supply Chain Intelligence Brief</h1><h2>Top relevant developments</h2><ol>${rows || '<li>No HIGH or MEDIUM developments in this period.</li>'}</ol><p>Every item is linked to its original public source and deterministic customer-graph match. No automated decision or risk score is included.</p>`,
+  };
+}
+
+function configuredEmailProvider(): EmailProvider | null {
+  return process.env.DAILY_BRIEF_EMAIL_ENABLED === 'true' && process.env.RESEND_API_KEY ? new ResendEmailProvider(process.env.RESEND_API_KEY) : null;
 }
 
 export const dailyBriefService = new DailyBriefService();

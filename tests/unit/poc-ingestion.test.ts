@@ -23,10 +23,15 @@ describe('BSK POC ingestion cycle', () => {
         return { articlesFound: 2, processed: 2, skipped: 0, failed: 0, exposuresCreated: 3 };
       }),
     };
+    const translations = { translatePending: vi.fn(async () => {
+      order.push('translate');
+      return { articlesChecked: 2, translated: 1, failed: 0, skipped: false };
+    }) };
     const service = new PocIngestionService(
       sources as never,
       relevance as never,
       () => new Date('2026-08-14T10:00:00Z'),
+      translations as never,
     );
 
     await expect(service.runCycle()).resolves.toMatchObject({
@@ -34,10 +39,11 @@ describe('BSK POC ingestion cycle', () => {
       sourcesCollected: 1,
       articlesProcessed: 2,
       relevanceMatchesCreated: 3,
+      articlesTranslated: 1,
     });
     expect(collect).toHaveBeenCalledWith('due');
     expect(collect).not.toHaveBeenCalledWith('fresh');
-    expect(order).toEqual(['collect:due', 'relevance']);
+    expect(order).toEqual(['collect:due', 'translate', 'relevance']);
   });
 
   it('records one source failure and still updates article relevance', async () => {

@@ -76,7 +76,7 @@ export function createApp({ env, resolveUser = createUserResolver(env) }: AppOpt
       data: {
         customerId,
         phase: 'POC_V1',
-        modules: { supplyChain: 'AVAILABLE', intelligence: 'RELEVANT_ARTICLES_AVAILABLE', dailyBrief: 'DISABLED', enterpriseWorkflows: 'DISABLED' },
+        modules: { supplyChain: 'AVAILABLE', intelligence: 'RELEVANT_ARTICLES_AVAILABLE', dailyBrief: 'AVAILABLE_EMAIL_OPT_IN', enterpriseWorkflows: 'DISABLED' },
       },
     });
   });
