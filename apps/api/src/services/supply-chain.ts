@@ -111,7 +111,12 @@ export class SupplyChainService {
   async graph(customerId: string) {
     // Keep this read compatible with production poolers configured for one
     // database connection. Parallel graph reads can otherwise exhaust the pool.
-    const customer = await db.customer.findUnique({ where: { id: customerId } });
+    // Do not expose internal revision metadata here. `graphRevision` is a
+    // Prisma BigInt and cannot be serialized by Express' JSON response.
+    const customer = await db.customer.findUnique({
+      where: { id: customerId },
+      select: { id: true, name: true },
+    });
     const companies = await db.company.findMany({ where: { customerId } });
     const countries = await db.country.findMany({ where: { locations: { some: { customerId } } } });
     const locations = await db.location.findMany({ where: { customerId } });

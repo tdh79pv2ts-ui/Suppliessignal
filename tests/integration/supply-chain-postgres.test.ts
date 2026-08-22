@@ -214,6 +214,8 @@ describe.sequential('SupplyChainService with PostgreSQL', () => {
     ]);
 
     const graph = await service.graph(customerA.id);
+    expect(graph.customer).toEqual({ id: customerA.id, name: customerA.name });
+    expect(() => JSON.stringify(graph)).not.toThrow();
     expect(graph.companies).toEqual(expect.arrayContaining([expect.objectContaining({ id: companyA.id, sourceUrl: provenance.sourceUrl })]));
     expect(graph.relationships.companySuppliers).toEqual(expect.arrayContaining([expect.objectContaining({ companyId: companyA.id, supplierId: supplierA.id, sourceUrl: provenance.sourceUrl })]));
     expect(graph.suppliers).toEqual(
