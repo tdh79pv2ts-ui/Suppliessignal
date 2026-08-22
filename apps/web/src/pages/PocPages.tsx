@@ -44,6 +44,32 @@ type MonitoringProfile = {
   coverage: Array<{ region: string; total: number; enabled: number; categories: Record<string, number>; languages: string[] }>;
 };
 
+function validMonitoringProfile(value: MonitoringProfile) {
+  return Boolean(value?.counts && value?.tags && Array.isArray(value.tags.auto) && Array.isArray(value.tags.suggested) && Array.isArray(value.tags.custom) && Array.isArray(value.sources));
+}
+
+function compatibleDashboard(value: Dashboard): Dashboard {
+  if (!value?.counts || !value?.customer) throw new Error('Incompatible dashboard response');
+  return {
+    ...value,
+    articles: value.articles ?? [],
+    sources: value.sources ?? [],
+    recentUpdates: value.recentUpdates ?? [],
+    monitoringProfile: {
+      countries: value.monitoringProfile?.countries ?? [],
+      regions: value.monitoringProfile?.regions ?? [],
+      industries: value.monitoringProfile?.industries ?? [],
+      suppliers: value.monitoringProfile?.suppliers ?? [],
+      factories: value.monitoringProfile?.factories ?? [],
+      products: value.monitoringProfile?.products ?? [],
+      materials: value.monitoringProfile?.materials ?? [],
+      locations: value.monitoringProfile?.locations ?? [],
+      monitoringKeywords: value.monitoringProfile?.monitoringKeywords ?? [],
+      searchLanguages: value.monitoringProfile?.searchLanguages ?? [],
+    },
+  };
+}
+
 function useMonitoringProfile() {
   const { customerId } = useWorkspace();
   const [data, setData] = useState<MonitoringProfile | null>(null);
@@ -52,7 +78,10 @@ function useMonitoringProfile() {
   useEffect(() => {
     setData(null); setError('');
     void apiRequest<MonitoringProfile>(`/customers/${customerId}/news-radar/monitoring-profile`)
-      .then(setData).catch(() => setError('The monitoring profile could not be loaded.'));
+      .then((result) => {
+        if (!validMonitoringProfile(result)) throw new Error('Incompatible monitoring-profile response');
+        setData(result);
+      }).catch(() => setError('The monitoring profile could not be loaded. The API may still be deploying.'));
   }, [customerId, version]);
   return { customerId, data, error, reload: () => setVersion((value) => value + 1) };
 }
@@ -62,7 +91,7 @@ function usePocDashboard() {
   const [data, setData] = useState<Dashboard | null>(null);
   const [error, setError] = useState('');
   const [version, setVersion] = useState(0);
-  useEffect(() => { setData(null); setError(''); void apiRequest<Dashboard>(`/customers/${customerId}/news-radar`).then(setData).catch(() => setError('The BSK intelligence dashboard could not be loaded.')); }, [customerId, version]);
+  useEffect(() => { setData(null); setError(''); void apiRequest<Dashboard>(`/customers/${customerId}/news-radar`).then((result) => setData(compatibleDashboard(result))).catch(() => setError('The BSK intelligence dashboard could not be loaded.')); }, [customerId, version]);
   return { data, error, reload: () => setVersion((value) => value + 1) };
 }
 

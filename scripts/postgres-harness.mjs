@@ -83,7 +83,7 @@ export async function withDisposablePostgres(callback) {
     );
     run(
       join(bin, 'pg_ctl'),
-      ['-D', data, '-o', `-F -p ${port} -h 127.0.0.1`, '-w', 'start'],
+      ['-D', data, '-o', `-F -p ${port} -h 127.0.0.1 -k ${root}`, '-w', 'start'],
       { env },
     );
     started = true;
