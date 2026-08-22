@@ -85,6 +85,13 @@ export function createNewsRadarRouter(
       response.json({ data: await service.listRelevantArticles(params.customerId, preference.language) });
     }
   }));
+  router.get('/customers/:customerId/intelligence', requireCustomerAccess, asyncHandler(async (request, response) => {
+    const params = parse(customerParamsSchema, request.params, response);
+    if (params && request.authUser) {
+      const preference = await briefs.getPreference(params.customerId, request.authUser.id);
+      response.json({ data: await service.intelligence(params.customerId, preference.language) });
+    }
+  }));
   router.get('/customers/:customerId/news-radar/exposures', requireCustomerAccess, asyncHandler(async (request, response) => {
     const params = parse(customerParamsSchema, request.params, response);
     const query = parse<NewsRadarListInput>(newsRadarListSchema, request.query, response);

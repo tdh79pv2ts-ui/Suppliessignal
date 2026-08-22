@@ -12,7 +12,7 @@ const service = new NewsRadarService();
 const briefService = new DailyBriefService();
 const email = new FakeEmailProvider();
 const deliveryBriefService = new DailyBriefService(email, 'briefs@example.test');
-const ids = { customerA: randomUUID(), customerB: randomUUID(), user: randomUUID(), supplier: randomUUID(), source: randomUUID(), article: randomUUID(), irrelevantArticle: randomUUID(), foreignArticle: randomUUID() };
+const ids = { customerA: randomUUID(), customerB: randomUUID(), user: randomUUID(), supplier: randomUUID(), source: randomUUID(), article: randomUUID(), irrelevantArticle: randomUUID(), foreignArticle: randomUUID(), broaderArticle: randomUUID() };
 const isolatedCustomerGraph: NewsRadarGraph = {
   customer: { id: ids.customerA, name: 'Radar Customer A' },
   suppliers: [{ id: ids.supplier, name: 'Distinct Components Group', country: 'Vietnam', city: 'Hanoi' }],
@@ -29,17 +29,20 @@ describe.sequential('news radar with PostgreSQL', () => {
     await db.customerMembership.create({ data: { userId: ids.user, customerId: ids.customerA } });
     await db.supplier.create({ data: { id: ids.supplier, customerId: ids.customerA, name: 'Distinct Components Group', country: 'Vietnam', city: 'Hanoi', tier: 'TIER_1', criticality: 'HIGH' } });
     await db.source.create({ data: { id: ids.source, name: 'Radar fixture source', sourceType: 'MANUAL', baseUrl: 'https://radar.example.test', category: 'NEWS', reliability: 'HIGH' } });
+    await db.customerSourcePreference.create({ data: { customerId: ids.customerA, sourceId: ids.source, enabled: true, recommended: true } });
     await db.sourceArticle.create({ data: { id: ids.article, sourceId: ids.source, originalUrl: 'https://radar.example.test/fire', title: 'Fire disrupts Distinct Components Group production in Vietnam', normalizedText: 'Fire disrupts Distinct Components Group production in Vietnam.', contentHash: `content-${ids.article}`, urlHash: `url-${ids.article}`, status: 'NORMALIZED' } });
     await db.sourceArticle.create({ data: { id: ids.irrelevantArticle, sourceId: ids.source, originalUrl: 'https://radar.example.test/unrelated', title: 'Sports club wins a local final', normalizedText: 'A sports club won its local final.', contentHash: `content-${ids.irrelevantArticle}`, urlHash: `url-${ids.irrelevantArticle}`, status: 'NORMALIZED' } });
     await db.sourceArticle.create({ data: { id: ids.foreignArticle, sourceId: ids.source, originalUrl: 'https://radar.example.test/zh-fire', title: '越南工厂发生火灾', excerpt: '生产中断。', language: 'zh', contentHash: `content-${ids.foreignArticle}`, urlHash: `url-${ids.foreignArticle}`, status: 'NORMALIZED' } });
+    await db.sourceArticle.create({ data: { id: ids.broaderArticle, sourceId: ids.source, originalUrl: 'https://radar.example.test/red-sea', title: 'War disrupts Red Sea shipping routes and energy prices', normalizedText: 'Conflict delays global shipping and raises energy prices.', contentHash: `content-${ids.broaderArticle}`, urlHash: `url-${ids.broaderArticle}`, status: 'NORMALIZED' } });
   });
   afterAll(async () => {
     await db.dailyBriefDelivery.deleteMany({ where: { customerId: { in: [ids.customerA, ids.customerB] } } });
     await db.dailyBrief.deleteMany({ where: { customerId: { in: [ids.customerA, ids.customerB] } } });
     await db.dailyBriefPreference.deleteMany({ where: { userId: ids.user } });
-    await db.newsRadarExposure.deleteMany({ where: { sourceArticleId: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle] } } });
-    await db.newsRadarArticleProcessing.deleteMany({ where: { sourceArticleId: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle] } } });
-    await db.sourceArticle.deleteMany({ where: { id: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle] } } });
+    await db.newsRadarExposure.deleteMany({ where: { sourceArticleId: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle, ids.broaderArticle] } } });
+    await db.newsRadarArticleProcessing.deleteMany({ where: { sourceArticleId: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle, ids.broaderArticle] } } });
+    await db.sourceArticle.deleteMany({ where: { id: { in: [ids.article, ids.irrelevantArticle, ids.foreignArticle, ids.broaderArticle] } } });
+    await db.customerSourcePreference.deleteMany({ where: { customerId: ids.customerA, sourceId: ids.source } });
     await db.source.deleteMany({ where: { id: ids.source } });
     await db.supplier.deleteMany({ where: { id: ids.supplier } });
     await db.customerMembership.deleteMany({ where: { userId: ids.user } });
@@ -73,6 +76,18 @@ describe.sequential('news radar with PostgreSQL', () => {
       relatedSuppliers: ['Distinct Components Group'],
     });
     await expect(service.listRelevantArticles(ids.customerB)).resolves.toEqual({ items: [] });
+  });
+
+  it('returns a material broader development without implying direct BSK exposure', async () => {
+    await expect(service.processArticle(ids.broaderArticle)).resolves.toMatchObject({ exposuresCreated: 0 });
+    const result = await service.intelligence(ids.customerA);
+    expect(result.developments).toEqual(expect.arrayContaining([expect.objectContaining({
+      level: 'BROADER',
+      title: 'War disrupts Red Sea shipping routes and energy prices',
+      explanation: expect.stringContaining('No direct BSK exposure is confirmed'),
+      evidence: [expect.objectContaining({ url: 'https://radar.example.test/red-sea' })],
+    })]));
+    await expect(service.intelligence(ids.customerB)).resolves.toMatchObject({ developments: [] });
   });
 
   it('does not generate a scheduled brief for a disabled preference', async () => {

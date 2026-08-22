@@ -21,7 +21,8 @@ import {
   SourceDetailPage,
   SourcesPage,
 } from './pages/SourcePages';
-import { PocArticlesPage, PocDailyBriefPage, PocMonitoringProfilePage, PocSourcesPage } from './pages/PocPages';
+import { PocDailyBriefPage, PocSourcesPage } from './pages/PocPages';
+import { IntelligencePage } from './pages/IntelligencePage';
 
 export function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -116,9 +117,9 @@ export function App() {
       <Route element={shell}>
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/news-radar" element={<Navigate to="/dashboard" replace />} />
-        <Route path="/news-radar/exposures/:id" element={<Navigate to="/articles" replace />} />
-        <Route path="/daily-brief" element={<PocDailyBriefPage />} />
-        <Route path="/monitoring-profile" element={<PocMonitoringProfilePage />} />
+        <Route path="/news-radar/exposures/:id" element={<Navigate to="/intelligence" replace />} />
+        <Route path="/daily-brief" element={<Navigate to="/settings" replace />} />
+        <Route path="/monitoring-profile" element={<Navigate to="/intelligence#watch-topics" replace />} />
         <Route path="/supply-chain" element={<SupplyChainOverview />} />
         {entityKinds.flatMap((kind) => [
           <Route
@@ -134,7 +135,8 @@ export function App() {
         ])}
         <Route path="/supply-chain/ports" element={<PortsPage />} />
         <Route path="/sources" element={<PocSourcesPage />} />
-        <Route path="/articles" element={<PocArticlesPage />} />
+        <Route path="/intelligence" element={<IntelligencePage />} />
+        <Route path="/articles" element={<Navigate to="/intelligence" replace />} />
         <Route
           path="/source-admin"
           element={
@@ -175,7 +177,7 @@ export function App() {
             )
           }
         />
-        <Route path="/settings" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/settings" element={<PocDailyBriefPage />} />
       </Route>
       <Route
         path="*"

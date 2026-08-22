@@ -6,8 +6,7 @@ import {
   RadioTower,
   ShieldCheck,
   Newspaper,
-  Mail,
-  Tags,
+  Settings,
 } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { supabase } from '../lib/auth';
@@ -16,10 +15,8 @@ import { useWorkspace } from '../lib/workspace';
 const baseNavigation = [
   { label: 'Dashboard', to: '/dashboard', icon: LayoutDashboard },
   { label: 'Supply chain', to: '/supply-chain', icon: Boxes },
-  { label: 'Monitoring', to: '/monitoring-profile', icon: Tags },
+  { label: 'Intelligence', to: '/intelligence', icon: Newspaper },
   { label: 'Sources', to: '/sources', icon: RadioTower },
-  { label: 'Articles', to: '/articles', icon: Newspaper },
-  { label: 'Daily Brief', to: '/daily-brief', icon: Mail },
 ];
 
 export function AppShell() {
@@ -48,7 +45,7 @@ export function AppShell() {
           </div>
         </div>
         <nav
-          className="grid grid-cols-3 gap-1 p-3 sm:flex sm:overflow-x-auto lg:block lg:space-y-1"
+          className="grid grid-cols-2 gap-1 p-3 sm:grid-cols-4 lg:block lg:space-y-1"
           aria-label="Primary navigation"
         >
           {navigation.map(({ label, to, icon: Icon }) => (
@@ -95,8 +92,11 @@ export function AppShell() {
               ))}
             </select>
           </div>
-          <div className="flex items-center gap-2 rounded-full border bg-canvas px-3 py-1.5 text-xs font-medium text-muted">
-            <ShieldCheck className="h-3.5 w-3.5 text-signal" /> Secure session
+          <div className="flex items-center gap-2">
+            <NavLink to="/settings" className="focus-ring flex items-center gap-2 rounded-full border bg-white px-3 py-1.5 text-xs font-medium text-muted hover:text-ink"><Settings className="h-3.5 w-3.5" /> Settings</NavLink>
+            <div className="hidden items-center gap-2 rounded-full border bg-canvas px-3 py-1.5 text-xs font-medium text-muted sm:flex">
+              <ShieldCheck className="h-3.5 w-3.5 text-signal" /> Secure session
+            </div>
           </div>
         </header>
         <Outlet />

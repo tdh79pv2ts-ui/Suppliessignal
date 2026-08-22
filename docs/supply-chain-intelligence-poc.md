@@ -20,11 +20,13 @@ PostgreSQL remains the system of record. Original article URLs and source metada
 - `NewsRadarArticleProcessing` provides a recoverable database lease. `NewsRadarExposure` stores one deterministic customer/article/entity match with typed tenant-safe references, matched terms, confidence-as-match-specificity, a path snapshot and the original article.
 - `DailyBriefPreference` belongs to an exact user/customer membership and is disabled by default. `DailyBriefDelivery` records idempotent tenant-safe email delivery when the optional server provider is configured.
 - `DailyBrief` freezes the graph revision and supply-chain counts. `DailyBriefItem` has composite tenant-safe references to its brief and exposure. Re-generation for the same customer/date is idempotent.
-- The POC worker collects enabled sources, creates optional schema-validated translations, and processes pending articles in that order. The radar worker generates due briefs; optional Resend delivery is disabled unless both server configuration and user preference explicitly enable it.
+- The POC worker uses database-backed customer source preferences as the authoritative collection allow-list, creates optional schema-validated translations, and processes pending articles in that order. The radar worker generates due briefs; optional Resend delivery is disabled unless both server configuration and user preference explicitly enable it.
 
 ## Customer experience
 
-The customer-facing navigation exposes Dashboard, Supply chain, News radar, Daily brief and Settings. ADMIN/REVIEWER may additionally inspect Sources and Articles. Claims, extraction, Events, exposure candidates, identities and review workflows remain available through their existing authorized APIs for backward compatibility, but are not exposed in the simplified POC frontend.
+The customer-facing navigation exposes only Dashboard, Supply chain, Intelligence and Sources. Watch topics are managed inside Intelligence. Language and Daily Brief preferences sit behind Settings rather than occupying primary navigation. Claims, extraction, Events, exposure candidates, identities and review workflows remain available through their existing authorized APIs for backward compatibility, but are not exposed in the simplified POC frontend.
+
+Intelligence is a lightweight deterministic view, not a restored Event workflow. `HIGH` graph matches are Direct impact, `MEDIUM` contextual dependencies are Potential impact, and globally material processed signals from explicitly enabled sources can be shown as Broader developments only with the statement that no direct BSK exposure is confirmed. Similar headlines with the same level and topic inside a bounded time window are grouped; all underlying publisher URLs remain inspectable evidence.
 
 The Daily Brief preview and optional delivery contain:
 

@@ -8,15 +8,7 @@ describe('BSK POC ingestion cycle', () => {
       order.push(`collect:${id}`);
       return {} as never;
     });
-    const sources = {
-      listSources: vi.fn(async () => ({
-        items: [
-          { id: 'due', lastCollectedAt: new Date('2026-08-14T09:54:00Z'), collectionIntervalMinutes: 5 },
-          { id: 'fresh', lastCollectedAt: new Date('2026-08-14T09:58:00Z'), collectionIntervalMinutes: 5 },
-        ],
-      })),
-      collect,
-    };
+    const sources = { collect };
     const relevance = {
       processPending: vi.fn(async () => {
         order.push('relevance');
@@ -32,6 +24,10 @@ describe('BSK POC ingestion cycle', () => {
       relevance as never,
       () => new Date('2026-08-14T10:00:00Z'),
       translations as never,
+      (async (_now, collectSource) => {
+        await collectSource('due');
+        return { checked: 2, collected: 1, skipped: 1, failed: 0, failures: [] };
+      }) as never,
     );
 
     await expect(service.runCycle()).resolves.toMatchObject({
@@ -48,10 +44,8 @@ describe('BSK POC ingestion cycle', () => {
 
   it('records one source failure and still updates article relevance', async () => {
     const relevance = { processPending: vi.fn(async () => ({ articlesFound: 0, processed: 0, skipped: 0, failed: 0, exposuresCreated: 0 })) };
-    const service = new PocIngestionService({
-      listSources: vi.fn(async () => ({ items: [{ id: 'broken', lastCollectedAt: null, collectionIntervalMinutes: 5 }] })),
-      collect: vi.fn(async () => { throw new Error('Feed unavailable'); }),
-    } as never, relevance as never);
+    const service = new PocIngestionService({ collect: vi.fn() } as never, relevance as never, undefined, undefined,
+      (async () => ({ checked: 1, collected: 0, skipped: 0, failed: 1, failures: [{ sourceId: 'broken', message: 'Feed unavailable' }] })) as never);
 
     const result = await service.runCycle();
     expect(result.sourceFailures).toEqual([{ sourceId: 'broken', message: 'Feed unavailable' }]);

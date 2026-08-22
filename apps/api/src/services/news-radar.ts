@@ -5,6 +5,7 @@ import { ServiceError } from './errors.js';
 import { sourceHealth } from './source-intelligence.js';
 import { buildRegionalProfile, sourceRecommendation } from './regional-source-profile.js';
 import { monitoringProfileService } from './monitoring-profile.js';
+import { buildIntelligenceView, type IntelligenceArticleInput } from './intelligence-view.js';
 import {
   matchArticleToSupplyChain,
   type NewsRadarGraph,
@@ -98,6 +99,7 @@ export class NewsRadarService {
       .filter((item): item is typeof item & { recommendation: NonNullable<typeof item.recommendation> } => Boolean(item.recommendation))
       .sort((a, b) => a.recommendation.priority - b.recommendation.priority || a.source.name.localeCompare(b.source.name));
     const relevantArticles = groupRelevantArticles(matches, preferredLanguage);
+    const intelligence = await this.intelligenceFromMatches(customerId, preferredLanguage, matches);
     return {
       customer: graph.customer,
       counts: {
@@ -115,12 +117,66 @@ export class NewsRadarService {
       sources: sources.map(({ source, recommendation }) => ({ id: source.id, name: source.name, type: source.sourceType, url: source.feedUrl ?? source.baseUrl, country: source.country, region: source.region, industry: source.industry, category: source.category, language: source.language, lastChecked: source.lastCollectedAt, lastSuccessfulSync: source.lastSuccessfulCollectionAt, status: source.customerPreferences[0]?.enabled === false ? 'DISABLED' : sourceStatus(source), health: sourceHealth(source), articleCount: source._count.articles, recommendation, lastRun: source.collectionRuns[0] ?? null })),
       recentUpdates: recentRuns,
       articles: relevantArticles,
+      intelligence,
     };
   }
 
   async listRelevantArticles(customerId: string, preferredLanguage = 'en') {
     const matches = await db.newsRadarExposure.findMany({ where: { customerId, policyVersion: NEWS_RADAR_POLICY_VERSION, relevanceLevel: { in: ['HIGH', 'MEDIUM'] } }, include: exposureInclude, orderBy: { sourceArticle: { discoveredAt: 'desc' } }, take: 500 });
     return { items: groupRelevantArticles(matches, preferredLanguage) };
+  }
+
+  async intelligence(customerId: string, preferredLanguage = 'en') {
+    const matches = await db.newsRadarExposure.findMany({
+      where: { customerId, policyVersion: NEWS_RADAR_POLICY_VERSION, relevanceLevel: { in: ['HIGH', 'MEDIUM'] } },
+      include: exposureInclude,
+      orderBy: { sourceArticle: { discoveredAt: 'desc' } },
+      take: 500,
+    });
+    return this.intelligenceFromMatches(customerId, preferredLanguage, matches);
+  }
+
+  private async intelligenceFromMatches(customerId: string, preferredLanguage: string, matches: ExposureRow[]) {
+    const [enabledPreferences, broaderProcessing] = await Promise.all([
+      db.customerSourcePreference.findMany({ where: { customerId, enabled: true }, select: { sourceId: true } }),
+      db.newsRadarArticleProcessing.findMany({
+        where: { status: 'COMPLETED', policyVersion: NEWS_RADAR_POLICY_VERSION, topics: { isEmpty: false }, sourceArticle: { source: { active: true } } },
+        include: { sourceArticle: { include: { source: true, translations: { where: { status: 'COMPLETED' } } } } },
+        orderBy: { sourceArticle: { discoveredAt: 'desc' } },
+        take: 250,
+      }),
+    ]);
+    const directAndPotential = groupRelevantArticles(matches, preferredLanguage);
+    const matchedArticleIds = new Set(directAndPotential.map((item) => item.id));
+    const enabledSourceIds = new Set(enabledPreferences.map((item) => item.sourceId));
+    const broader: IntelligenceArticleInput[] = broaderProcessing
+      .filter((processing) => enabledSourceIds.has(processing.sourceArticle.sourceId) && !matchedArticleIds.has(processing.sourceArticleId))
+      .map((processing) => {
+        const article = processing.sourceArticle;
+        const translation = article.translations.find((value) => value.targetLanguage === preferredLanguage);
+        const originalSummary = article.excerpt ?? article.normalizedText?.slice(0, 500) ?? null;
+        return {
+          id: article.id,
+          title: translation?.translatedTitle ?? article.title,
+          summary: translation?.translatedSummary ?? originalSummary,
+          originalTitle: article.title,
+          originalSummary,
+          translated: Boolean(translation),
+          relevance: 'LOW' as const,
+          url: article.originalUrl,
+          publishedAt: article.publishedAt,
+          discoveredAt: article.discoveredAt,
+          topic: processing.topics[0] ?? 'OPERATIONAL',
+          category: article.category ?? article.source.category,
+          country: article.country ?? article.source.country,
+          region: article.region ?? article.source.region,
+          language: article.language,
+          source: { name: article.source.name, status: article.status },
+          relatedSuppliers: [], relatedFactories: [], relatedProducts: [], relatedMaterials: [],
+          relatedCountries: [], relatedLocations: [], reasons: [],
+        };
+      });
+    return buildIntelligenceView([...directAndPotential, ...broader]);
   }
 
   async listExposures(customerId: string, input: NewsRadarListInput) {
@@ -267,8 +323,8 @@ export class NewsRadarService {
 }
 
 type ExposureRow = Prisma.NewsRadarExposureGetPayload<{ include: typeof exposureInclude }>;
-function groupRelevantArticles(rows: ExposureRow[], preferredLanguage = 'en') {
-  const grouped = new Map<string, { id: string; title: string; summary: string | null; originalTitle: string; originalSummary: string | null; translated: boolean; relevance: 'HIGH' | 'MEDIUM'; url: string; publishedAt: Date | null; discoveredAt: Date; category: string; country: string | null; region: string | null; language: string | null; source: { name: string; status: string }; relatedSuppliers: string[]; relatedFactories: string[]; relatedProducts: string[]; relatedMaterials: string[]; relatedCountries: string[]; relatedLocations: string[]; reasons: string[] }>();
+function groupRelevantArticles(rows: ExposureRow[], preferredLanguage = 'en'): IntelligenceArticleInput[] {
+  const grouped = new Map<string, IntelligenceArticleInput>();
   for (const row of rows) {
     const originalSummary = row.sourceArticle.excerpt ?? row.sourceArticle.normalizedText?.slice(0, 500) ?? null;
     const translation = row.sourceArticle.translations.find((value) => value.targetLanguage === preferredLanguage);
@@ -277,10 +333,12 @@ function groupRelevantArticles(rows: ExposureRow[], preferredLanguage = 'en') {
       originalTitle: row.sourceArticle.title, originalSummary, translated: Boolean(translation), relevance: row.relevanceLevel as 'HIGH' | 'MEDIUM',
       url: row.sourceArticle.originalUrl, publishedAt: row.sourceArticle.publishedAt, discoveredAt: row.sourceArticle.discoveredAt,
       category: row.sourceArticle.source.category, source: { name: row.sourceArticle.source.name, status: row.sourceArticle.status },
+      topic: row.topic,
       country: row.sourceArticle.country ?? row.sourceArticle.source.country, region: row.sourceArticle.region ?? row.sourceArticle.source.region, language: row.sourceArticle.language,
       relatedSuppliers: [], relatedFactories: [], relatedProducts: [], relatedMaterials: [], relatedCountries: [], relatedLocations: [], reasons: [],
     };
     if (row.relevanceLevel === 'HIGH') existing.relevance = 'HIGH';
+    if (!existing.topic) existing.topic = row.topic;
     if (row.supplier && !existing.relatedSuppliers.includes(row.supplier.name)) existing.relatedSuppliers.push(row.supplier.name);
     if (row.factory && !existing.relatedFactories.includes(row.factory.name)) existing.relatedFactories.push(row.factory.name);
     if (row.factory?.country && !existing.relatedCountries.includes(row.factory.country)) existing.relatedCountries.push(row.factory.country);

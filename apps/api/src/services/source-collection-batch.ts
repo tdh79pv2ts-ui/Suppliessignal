@@ -16,7 +16,7 @@ export async function collectDueSources(
     },
     orderBy: { id: 'asc' },
   });
-  const result = { checked: sources.length, collected: 0, skipped: 0, failed: 0 };
+  const result = { checked: sources.length, collected: 0, skipped: 0, failed: 0, failures: [] as Array<{ sourceId: string; message: string }> };
   for (const source of sources) {
     const interval = source.collectionIntervalMinutes ?? 15;
     const due = !source.lastCollectedAt || now.getTime() - source.lastCollectedAt.getTime() >= interval * 60_000;
@@ -29,6 +29,7 @@ export async function collectDueSources(
       result.collected++;
     } catch (error) {
       result.failed++;
+      result.failures.push({ sourceId: source.id, message: error instanceof Error ? error.message : 'Collection failed' });
       console.error(JSON.stringify({ operation: 'source_collection_failure', sourceId: source.id, error: error instanceof Error ? error.message : 'Collection failed' }));
     }
   }

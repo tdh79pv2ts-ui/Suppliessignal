@@ -4,21 +4,13 @@ import {
   type SourceIntelligenceService,
 } from './source-intelligence.js';
 import { articleTranslationService, type ArticleTranslationService } from './article-translation.js';
+import { collectDueSources } from './source-collection-batch.js';
 
-type CollectableSource = {
-  id: string;
-  lastCollectedAt: Date | null;
-  collectionIntervalMinutes: number | null;
-};
-
-type SourceDependency = Pick<SourceIntelligenceService, 'collect'> & {
-  listSources(filters: Record<string, unknown>): Promise<{
-    items: CollectableSource[];
-  }>;
-};
+type SourceDependency = Pick<SourceIntelligenceService, 'collect'>;
 
 type RelevanceDependency = Pick<NewsRadarService, 'processPending'>;
 type TranslationDependency = Pick<ArticleTranslationService, 'translatePending'>;
+type DueSourceCollector = typeof collectDueSources;
 
 export type PocIngestionResult = {
   sourcesChecked: number;
@@ -39,42 +31,20 @@ export class PocIngestionService {
     private readonly relevance: RelevanceDependency = newsRadarService,
     private readonly now: () => Date = () => new Date(),
     private readonly translations: TranslationDependency = articleTranslationService,
+    private readonly collectDue: DueSourceCollector = collectDueSources,
   ) {}
 
   async runCycle(batchSize = 100): Promise<PocIngestionResult> {
-    const configured = await this.sources.listSources({
-      page: 1,
-      pageSize: 100,
-      active: 'true',
-      collectionEnabled: 'true',
-    });
-    const sourceFailures: PocIngestionResult['sourceFailures'] = [];
-    let sourcesCollected = 0;
-    const currentTime = this.now().getTime();
-
-    for (const source of configured.items) {
-      const intervalMinutes = source.collectionIntervalMinutes ?? 5;
-      const due =
-        !source.lastCollectedAt ||
-        currentTime - source.lastCollectedAt.getTime() >= intervalMinutes * 60_000;
-      if (!due) continue;
-      try {
-        await this.sources.collect(source.id);
-        sourcesCollected++;
-      } catch (error) {
-        sourceFailures.push({
-          sourceId: source.id,
-          message: error instanceof Error ? error.message : 'Collection failed',
-        });
-      }
-    }
+    // The database-backed scheduler is authoritative: a source is eligible only
+    // when at least one customer preference explicitly enables it.
+    const collection = await this.collectDue(this.now(), (sourceId) => this.sources.collect(sourceId));
 
     const translated = await this.translations.translatePending(batchSize);
     const processed = await this.relevance.processPending(batchSize);
     return {
-      sourcesChecked: configured.items.length,
-      sourcesCollected,
-      sourceFailures,
+      sourcesChecked: collection.checked,
+      sourcesCollected: collection.collected,
+      sourceFailures: collection.failures,
       articlesFound: processed.articlesFound,
       articlesProcessed: processed.processed,
       articlesSkipped: processed.skipped,
