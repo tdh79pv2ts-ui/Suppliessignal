@@ -6,12 +6,21 @@ import { DailyBriefService } from '../../apps/api/src/services/daily-brief';
 import { ArticleTranslationService } from '../../apps/api/src/services/article-translation';
 import { FakeArticleTranslationProvider } from '../../packages/ai/src/translation';
 import { FakeEmailProvider } from '../../apps/api/src/services/email';
+import type { NewsRadarGraph } from '../../apps/api/src/services/news-radar-matching';
 
 const service = new NewsRadarService();
 const briefService = new DailyBriefService();
 const email = new FakeEmailProvider();
 const deliveryBriefService = new DailyBriefService(email, 'briefs@example.test');
 const ids = { customerA: randomUUID(), customerB: randomUUID(), user: randomUUID(), supplier: randomUUID(), source: randomUUID(), article: randomUUID(), irrelevantArticle: randomUUID(), foreignArticle: randomUUID() };
+const isolatedCustomerGraph: NewsRadarGraph = {
+  customer: { id: ids.customerA, name: 'Radar Customer A' },
+  suppliers: [{ id: ids.supplier, name: 'Distinct Components Group', country: 'Vietnam', city: 'Hanoi' }],
+  factories: [],
+  products: [],
+  materials: [],
+  routes: [],
+};
 
 describe.sequential('news radar with PostgreSQL', () => {
   beforeAll(async () => {
@@ -86,7 +95,9 @@ describe.sequential('news radar with PostgreSQL', () => {
       summary: 'Production was disrupted.',
     }));
     await expect(translations.translate(ids.foreignArticle, 'en')).resolves.toMatchObject({ status: 'COMPLETED', targetLanguage: 'en' });
-    await expect(service.processArticle(ids.foreignArticle)).resolves.toMatchObject({ exposuresCreated: 1 });
+    await expect(service.processArticle(ids.foreignArticle, [
+      { customerId: ids.customerA, graph: isolatedCustomerGraph },
+    ])).resolves.toMatchObject({ exposuresCreated: 1 });
     const original = await db.sourceArticle.findUniqueOrThrow({ where: { id: ids.foreignArticle } });
     expect(original).toMatchObject({ title: '越南工厂发生火灾', excerpt: '生产中断。', language: 'zh' });
     await expect(service.listRelevantArticles(ids.customerA, 'en')).resolves.toEqual(expect.objectContaining({
