@@ -46,6 +46,23 @@ describe.sequential('customer monitoring profile with PostgreSQL', () => {
     expect(profile.coverage.find((item) => item.region === 'Bangladesh')!.total).toBeGreaterThanOrEqual(1);
   });
 
+  it('synchronizes a broad derived monitoring profile in one request', async () => {
+    const broadProducts = Array.from({ length: 120 }, (_, index) => ({
+      id: randomUUID(),
+      customerId: ids.customer,
+      name: `Broad profile product ${index}`,
+      criticality: 'MEDIUM' as const,
+    }));
+    const productIds = broadProducts.map((product) => product.id);
+    await db.product.createMany({ data: broadProducts });
+    try {
+      const profile = await service.get(ids.customer);
+      expect(profile.tags.auto.filter((tag) => tag.category === 'PRODUCT')).toHaveLength(120);
+    } finally {
+      await db.product.deleteMany({ where: { id: { in: productIds } } });
+    }
+  });
+
   it('persists independent auto, suggested and custom tag controls', async () => {
     const initial = await service.get(ids.customer);
     const auto = initial.tags.auto.find((tag) => tag.label === 'Bangladesh')!;

@@ -39,6 +39,8 @@ const suggestionRules: Record<string, Array<[string, string]>> = {
   ],
 };
 
+const PROFILE_SYNC_TRANSACTION_TIMEOUT_MS = 30_000;
+
 function normalized(value: string) {
   return value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
@@ -239,6 +241,11 @@ export class MonitoringProfileService {
           update: { recommended: true, reason: recommendation.reason },
         });
       }
+    }, {
+      // The verified source catalog is intentionally broad. Remote staging databases
+      // can take longer than Prisma's five-second interactive-transaction default
+      // while synchronizing the initial customer profile.
+      timeout: PROFILE_SYNC_TRANSACTION_TIMEOUT_MS,
     });
   }
 }
