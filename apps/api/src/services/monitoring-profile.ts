@@ -221,24 +221,72 @@ export class MonitoringProfileService {
     suggestedTags: TagDefinition[],
     sources: Array<{ source: { id: string; sourceType: string; collectionEnabled: boolean }; recommendation: { reason: string } | null }>,
   ) {
+    const desiredTags = [
+      ...autoTags.map((item) => ({ ...item, type: 'AUTO' as const, initialStatus: 'ACTIVE' as const })),
+      ...suggestedTags.map((item) => ({ ...item, type: 'SUGGESTED' as const, initialStatus: 'PENDING' as const })),
+    ];
+    const recommendedSources = sources.filter(
+      (item): item is typeof item & { recommendation: NonNullable<typeof item.recommendation> } => Boolean(item.recommendation),
+    );
+    const [existingTags, existingPreferences] = await Promise.all([
+      db.customerMonitoringTag.findMany({
+        where: { customerId, type: { in: ['AUTO', 'SUGGESTED'] } },
+        select: { id: true, type: true, key: true, label: true, normalizedLabel: true, category: true, reason: true, derivedActive: true },
+      }),
+      db.customerSourcePreference.findMany({
+        where: { customerId, sourceId: { in: recommendedSources.map((item) => item.source.id) } },
+        select: { sourceId: true, recommended: true, reason: true },
+      }),
+    ]);
+    const tagKey = (type: string, key: string) => `${type}:${key}`;
+    const existingTagMap = new Map(existingTags.map((tag) => [tagKey(tag.type, tag.key), tag]));
+    const desiredTagKeys = new Set(desiredTags.map((tag) => tagKey(tag.type, tag.key)));
+    const existingPreferenceMap = new Map(existingPreferences.map((preference) => [preference.sourceId, preference]));
+
     await db.$transaction(async (tx) => {
-      await tx.customerMonitoringTag.updateMany({ where: { customerId, type: { in: ['AUTO', 'SUGGESTED'] } }, data: { derivedActive: false } });
-      for (const item of autoTags) await tx.customerMonitoringTag.upsert({
-        where: { customerId_type_key: { customerId, type: 'AUTO', key: item.key } },
-        create: { customerId, type: 'AUTO', ...item, normalizedLabel: normalized(item.label), status: 'ACTIVE', derivedActive: true },
-        update: { label: item.label, normalizedLabel: normalized(item.label), category: item.category, reason: item.reason, derivedActive: true },
-      });
-      for (const item of suggestedTags) await tx.customerMonitoringTag.upsert({
-        where: { customerId_type_key: { customerId, type: 'SUGGESTED', key: item.key } },
-        create: { customerId, type: 'SUGGESTED', ...item, normalizedLabel: normalized(item.label), status: 'PENDING', derivedActive: true },
-        update: { label: item.label, normalizedLabel: normalized(item.label), category: item.category, reason: item.reason, derivedActive: true },
-      });
-      for (const { source, recommendation } of sources) {
-        if (!recommendation) continue;
-        await tx.customerSourcePreference.upsert({
+      const staleTagIds = existingTags
+        .filter((tag) => tag.derivedActive && !desiredTagKeys.has(tagKey(tag.type, tag.key)))
+        .map((tag) => tag.id);
+      if (staleTagIds.length > 0) {
+        await tx.customerMonitoringTag.updateMany({ where: { id: { in: staleTagIds } }, data: { derivedActive: false } });
+      }
+      const missingTags = desiredTags.filter((tag) => !existingTagMap.has(tagKey(tag.type, tag.key)));
+      if (missingTags.length > 0) {
+        await tx.customerMonitoringTag.createMany({
+          data: missingTags.map((tag) => ({
+            customerId, type: tag.type, key: tag.key, label: tag.label,
+            normalizedLabel: normalized(tag.label), category: tag.category,
+            reason: tag.reason, status: tag.initialStatus, derivedActive: true,
+          })),
+          skipDuplicates: true,
+        });
+      }
+      for (const tag of desiredTags) {
+        const existing = existingTagMap.get(tagKey(tag.type, tag.key));
+        const normalizedLabel = normalized(tag.label);
+        if (!existing || (existing.label === tag.label && existing.normalizedLabel === normalizedLabel && existing.category === tag.category && existing.reason === tag.reason && existing.derivedActive)) continue;
+        await tx.customerMonitoringTag.update({ where: { id: existing.id }, data: {
+          label: tag.label, normalizedLabel, category: tag.category, reason: tag.reason, derivedActive: true,
+        } });
+      }
+
+      const missingPreferences = recommendedSources.filter((item) => !existingPreferenceMap.has(item.source.id));
+      if (missingPreferences.length > 0) {
+        await tx.customerSourcePreference.createMany({
+          data: missingPreferences.map(({ source, recommendation }) => ({
+            customerId, sourceId: source.id,
+            enabled: source.collectionEnabled || !['RSS', 'ATOM'].includes(source.sourceType),
+            recommended: true, reason: recommendation.reason,
+          })),
+          skipDuplicates: true,
+        });
+      }
+      for (const { source, recommendation } of recommendedSources) {
+        const existing = existingPreferenceMap.get(source.id);
+        if (!existing || (existing.recommended && existing.reason === recommendation.reason)) continue;
+        await tx.customerSourcePreference.update({
           where: { customerId_sourceId: { customerId, sourceId: source.id } },
-          create: { customerId, sourceId: source.id, enabled: source.collectionEnabled || !['RSS', 'ATOM'].includes(source.sourceType), recommended: true, reason: recommendation.reason },
-          update: { recommended: true, reason: recommendation.reason },
+          data: { recommended: true, reason: recommendation.reason },
         });
       }
     }, {
