@@ -77,13 +77,6 @@ const disruptionTerms = [
   'hỏa hoạn', 'đình công', 'đóng cửa cảng', 'lũ lụt', 'động đất', 'trừng phạt',
 ];
 
-const countryLevelPathwayTerms = [
-  'factory', 'factories', 'production', 'manufacturing', 'supplier',
-  'supply chain', 'warehouse', 'port', 'shipping', 'freight', 'logistics',
-  'export', 'exports', 'import', 'imports', 'trade', 'tariff', 'tariffs', 'customs', 'garment', 'textile',
-  'raw material', 'commodity',
-];
-
 const countryAliases: Record<string, string[]> = {
   china: ['china', '中国', '中国', '중국', 'trung quốc'],
   myanmar: ['myanmar', 'burma', 'မြန်မာ'],
@@ -139,7 +132,7 @@ export function isBroaderSupplyChainDevelopment(
 ): boolean {
   const text = normalizeRadarText([article.title, article.excerpt, article.normalizedText, article.translatedTitle, article.translatedSummary].filter(Boolean).join(' '));
   if (topics.length === 0) return false;
-  const environmentalMagnitude = /\bm [5-9](?: \d+)?\b/.test(text) ||
+  const environmentalMagnitude = /\bm (?:6 [5-9]|[7-9](?: \d+)?)\b/.test(text) ||
     ['major', 'severe', 'catastrophic'].some((term) => containsPhrase(text, term));
   return topics.some((topic) =>
     (topic === 'ENVIRONMENTAL' && environmentalMagnitude) ||
@@ -174,7 +167,6 @@ export function matchArticleToSupplyChain(
   const monitoringTagMatches = (graph.monitoringTags ?? []).filter((tag) => containsPhrase(signalText, tag.label));
   const magnitudeSignal = /\bm [4-9](?: \d+)?\b/.test(signalText);
   const hasDisruption = magnitudeSignal || disruptionTerms.some((term) => containsPhrase(signalText, term)) || monitoringTagMatches.length > 0;
-  const hasCountryLevelPathway = magnitudeSignal || countryLevelPathwayTerms.some((term) => containsPhrase(signalText, term));
   if (magnitudeSignal && !topics.includes('ENVIRONMENTAL')) topics.push('ENVIRONMENTAL');
   if (monitoringTagMatches.length > 0 && topics.length === 0) topics.push('OPERATIONAL');
   const matches: NewsRadarMatch[] = [];
@@ -218,10 +210,9 @@ export function matchArticleToSupplyChain(
     const named = containsPhrase(text, factory.name) && factoryNameCounts.get(normalizeRadarText(factory.name)) === 1;
     const countryTerm = matchingLocationTerm(text, factory.country);
     const cityCountry = containsPhrase(text, factory.city) && Boolean(countryTerm);
-    const countryOnly = !cityCountry && Boolean(countryTerm) && hasCountryLevelPathway;
-    if (!named && !cityCountry && !countryOnly) continue;
-    const method: NewsRadarMatchMethod = named ? 'UNIQUE_EXACT_NAME' : cityCountry ? 'EXACT_CITY_COUNTRY' : 'EXACT_COUNTRY';
-    const terms = named ? [factory.name] : cityCountry ? [factory.city!, countryTerm!] : [countryTerm!];
+    if (!named && !cityCountry) continue;
+    const method: NewsRadarMatchMethod = named ? 'UNIQUE_EXACT_NAME' : 'EXACT_CITY_COUNTRY';
+    const terms = named ? [factory.name] : [factory.city!, countryTerm!];
     terms.forEach((term) => { detectedTerms.add(term); detectedLocations.add(term); });
     const path: NewsRadarMatch['pathSnapshot'] = [customerStep(graph)];
     if (factory.supplier) path.push({ nodeType: 'SUPPLIER' as const, id: factory.supplier.id, label: factory.supplier.name, relationship: 'explicit supplier' });
@@ -229,9 +220,9 @@ export function matchArticleToSupplyChain(
     pushUnique(matches, {
       matchKey: `factory:${factory.id}`,
       entityType: 'FACTORY', topic, matchMethod: method,
-      confidence: named ? 0.92 : cityCountry ? 0.78 : 0.64,
+      confidence: named ? 0.92 : 0.78,
       relevanceLevel: named ? 'HIGH' : 'MEDIUM',
-      reason: named ? 'Factory name occurs exactly in disruptive coverage.' : cityCountry ? 'Disruptive coverage names the exact factory city and country.' : 'Disruptive coverage explicitly names the factory country.',
+      reason: named ? 'Factory name occurs exactly in disruptive coverage.' : 'Disruptive coverage names the exact factory city and country.',
       matchedTerms: terms, pathSnapshot: path, factoryId: factory.id,
     });
   }

@@ -29,8 +29,8 @@ describe('deterministic supply-chain news radar matching', () => {
     expect(match('Fire disrupts Acme Components production in Thailand', value).filter((item) => item.entityType === 'SUPPLIER')).toEqual([expect.objectContaining({ supplierId: 'two', matchMethod: 'NAME_AND_LOCATION' })]);
   });
 
-  it('matches a factory country location only in explicit factory disruption coverage', () => {
-    expect(match('Flooding disrupts factories in Vietnam')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY' })]));
+  it('requires an exact factory city and country for geographic potential impact', () => {
+    expect(match('Flooding disrupts factories in Bac Ninh, Vietnam')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_CITY_COUNTRY' })]));
   });
 
   it('rejects country-only politics and history even when deep article text contains disruption words', () => {
@@ -43,14 +43,12 @@ describe('deterministic supply-chain news radar matching', () => {
     })).matches).toHaveLength(0);
   });
 
-  it('requires an explicit supply-chain pathway for country-only potential impact', () => {
+  it('never promotes country-only context to customer impact', () => {
     const chinaGraph = graph({
       factories: [{ id: 'factory-china', name: 'Guangzhou Factory', country: 'China', city: 'Guangzhou' }],
     });
     expect(match('Political conflict shapes university policy in China', chinaGraph)).toHaveLength(0);
-    expect(match('New tariffs disrupt textile exports from China', chinaGraph)).toEqual(expect.arrayContaining([
-      expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY', relevanceLevel: 'MEDIUM' }),
-    ]));
+    expect(match('New tariffs disrupt textile exports from China', chinaGraph)).toHaveLength(0);
   });
 
   it('does not treat source metadata as evidence that an article affects the source country', () => {
@@ -60,11 +58,11 @@ describe('deterministic supply-chain news radar matching', () => {
     ).matches).toHaveLength(0);
   });
 
-  it('matches a real-feed-shaped earthquake magnitude to an exact country dependency', () => {
+  it('does not convert a country-only earthquake into customer impact', () => {
     const result = match('M 6.2 - 45 km south of Santiago, Chile', graph({
       factories: [{ id: 'factory-chile', name: 'Chile Materials Plant', country: 'Chile', city: 'Valparaiso' }],
     }));
-    expect(result).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY', topic: 'ENVIRONMENTAL' })]));
+    expect(result).toHaveLength(0);
   });
 
   it('classifies technology disruptions without fuzzy matching', () => {
@@ -90,9 +88,9 @@ describe('deterministic supply-chain news radar matching', () => {
     expect(match('Flooding disrupts factories in Thailand').filter((item) => item.entityType === 'FACTORY')).toHaveLength(0);
   });
 
-  it('classifies an explicit customer country match as MEDIUM', () => {
-    expect(match('Flooding disrupts factories in Vietnam')).toEqual(expect.arrayContaining([
-      expect.objectContaining({ entityType: 'FACTORY', relevanceLevel: 'MEDIUM', matchMethod: 'EXACT_COUNTRY' }),
+  it('classifies an exact customer city and country match as MEDIUM', () => {
+    expect(match('Flooding disrupts factories in Bac Ninh, Vietnam')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'FACTORY', relevanceLevel: 'MEDIUM', matchMethod: 'EXACT_CITY_COUNTRY' }),
     ]));
   });
 
@@ -127,8 +125,8 @@ describe('deterministic supply-chain news radar matching', () => {
     ]));
   });
 
-  it('uses a suggested disruption theme with an exact customer country dependency', () => {
-    expect(match('Minimum wage changes affect factories in Vietnam', graph({
+  it('uses a suggested disruption theme with an exact customer city and country dependency', () => {
+    expect(match('Minimum wage changes affect factories in Bac Ninh, Vietnam', graph({
       monitoringTags: [{ label: 'minimum wage', type: 'SUGGESTED' }],
     }))).toEqual(expect.arrayContaining([
       expect.objectContaining({ entityType: 'FACTORY', relevanceLevel: 'MEDIUM' }),
@@ -140,7 +138,8 @@ describe('controlled broader-development classification', () => {
   it('accepts material trade, logistics and major natural-disaster pathways', () => {
     expect(isBroaderSupplyChainDevelopment({ title: 'New export controls restrict semiconductor supply chains' })).toBe(true);
     expect(isBroaderSupplyChainDevelopment({ title: 'Conflict delays Red Sea shipping and freight routes' })).toBe(true);
-    expect(isBroaderSupplyChainDevelopment({ title: 'M 6.4 earthquake strikes coastal region' })).toBe(true);
+    expect(isBroaderSupplyChainDevelopment({ title: 'M 7.4 earthquake strikes coastal region' })).toBe(true);
+    expect(isBroaderSupplyChainDevelopment({ title: 'M 5.4 earthquake strikes coastal region' })).toBe(false);
   });
 
   it('rejects generic politics, crime, sports and lifestyle coverage', () => {

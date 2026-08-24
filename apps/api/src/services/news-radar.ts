@@ -14,7 +14,7 @@ import {
 } from './news-radar-matching.js';
 
 const LEASE_MS = 2 * 60 * 1000;
-export const NEWS_RADAR_POLICY_VERSION = '3.2';
+export const NEWS_RADAR_POLICY_VERSION = '3.3';
 
 const exposureInclude = {
   sourceArticle: { include: { source: true, translations: { where: { status: 'COMPLETED' as const } } } },
