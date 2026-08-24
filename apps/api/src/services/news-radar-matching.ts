@@ -59,14 +59,14 @@ const topicTerms: Record<NewsRadarTopic, string[]> = {
   OPERATIONAL: ['fire', 'explosion', 'shutdown', 'production halt', 'bankruptcy', 'cyber incident', 'strike', 'labor dispute', 'labour dispute', 'brand', 'staking', 'streik', 'incendie', 'grève', 'incendio', 'huelga', '火灾', '罢工', '火災', 'ストライキ', '화재', '파업', 'hỏa hoạn', 'đình công'],
   LOGISTICS: ['port closure', 'shipping delay', 'shipping disruption', 'freight disruption', 'route disruption', 'port congestion', 'border closure', 'havensluiting', 'lieferverzögerung', 'fermeture du port', 'cierre del puerto', '港口关闭', '港湾閉鎖', '항만 폐쇄', 'đóng cửa cảng'],
   ENVIRONMENTAL: ['flood', 'flooding', 'earthquake', 'storm', 'cyclone', 'typhoon', 'wildfire', 'drought', 'overstroming', 'aardbeving', 'überschwemmung', 'erdbeben', 'inondation', 'séisme', 'inundación', 'terremoto', '洪水', '地震', '洪水', '지진', 'lũ lụt', 'động đất'],
-  TRADE: ['sanction', 'tariff', 'trade restriction', 'export control', 'export restriction', 'import restriction', 'customs restriction', 'sanctie', 'exportbeperking', 'sanktion', 'exportkontrolle', 'sanction commerciale', 'contrôle des exportations', 'sanción', 'control de exportaciones', '制裁', '出口管制', '制裁', '輸出規制', '제재', '수출 통제', 'trừng phạt', 'kiểm soát xuất khẩu'],
+  TRADE: ['sanction', 'tariff', 'tariffs', 'trade restriction', 'export control', 'export restriction', 'import restriction', 'customs restriction', 'sanctie', 'exportbeperking', 'sanktion', 'exportkontrolle', 'sanction commerciale', 'contrôle des exportations', 'sanción', 'control de exportaciones', '制裁', '出口管制', '制裁', '輸出規制', '제재', '수출 통제', 'trừng phạt', 'kiểm soát xuất khẩu'],
   TECHNOLOGY: ['semiconductor restriction', 'technology export control', 'cyber incident', 'cyberattack', 'cyber attack', 'halfgeleider', 'halbleiter', 'semi-conducteur', 'semiconductor', '半导体', '半導体', '반도체', 'chất bán dẫn'],
 };
 
 const disruptionTerms = [
   'disrupt', 'disruption', 'closed', 'closure', 'delay', 'shortage', 'restricted',
   'restriction', 'halt', 'shutdown', 'strike', 'fire', 'flood', 'flooding',
-  'earthquake', 'storm', 'cyclone', 'typhoon', 'bankruptcy', 'sanction', 'tariff',
+  'earthquake', 'storm', 'cyclone', 'typhoon', 'bankruptcy', 'sanction', 'tariff', 'tariffs',
   'export control', 'cyber incident', 'congestion', 'explosion',
   'cyberattack', 'cyber attack',
   'overstroming', 'aardbeving', 'staking', 'streik', 'überschwemmung', 'erdbeben',
@@ -75,6 +75,13 @@ const disruptionTerms = [
   '火災', 'ストライキ', '港湾閉鎖', '制裁', '輸出規制',
   '화재', '파업', '항만 폐쇄', '지진', '제재', '수출 통제',
   'hỏa hoạn', 'đình công', 'đóng cửa cảng', 'lũ lụt', 'động đất', 'trừng phạt',
+];
+
+const countryLevelPathwayTerms = [
+  'factory', 'factories', 'production', 'manufacturing', 'supplier',
+  'supply chain', 'warehouse', 'port', 'shipping', 'freight', 'logistics',
+  'export', 'exports', 'import', 'imports', 'trade', 'tariff', 'tariffs', 'customs', 'garment', 'textile',
+  'raw material', 'commodity',
 ];
 
 const countryAliases: Record<string, string[]> = {
@@ -153,10 +160,21 @@ export function matchArticleToSupplyChain(
   graph: NewsRadarGraph,
 ): { topics: NewsRadarTopic[]; matches: NewsRadarMatch[]; detectedTerms: string[]; detectedLocations: string[] } {
   const text = normalizeRadarText([article.title, article.excerpt, article.normalizedText, article.translatedTitle, article.translatedSummary].filter(Boolean).join(' '));
-  const topics = detectNewsRadarTopics(text);
-  const monitoringTagMatches = (graph.monitoringTags ?? []).filter((tag) => containsPhrase(text, tag.label));
-  const magnitudeSignal = /\bm [4-9](?: \d+)?\b/.test(text);
-  const hasDisruption = magnitudeSignal || disruptionTerms.some((term) => containsPhrase(text, term)) || monitoringTagMatches.length > 0;
+  // Matching may inspect the complete factual article, but event eligibility is
+  // intentionally anchored to its headline/summary window. This prevents an
+  // unrelated footer or deep-body mention from turning a country name into a
+  // customer-impact signal.
+  const summaryWindow = article.excerpt ?? article.translatedSummary ?? article.normalizedText?.slice(0, 700);
+  const signalText = normalizeRadarText([
+    article.title,
+    article.translatedTitle,
+    summaryWindow,
+  ].filter(Boolean).join(' '));
+  const topics = detectNewsRadarTopics(signalText);
+  const monitoringTagMatches = (graph.monitoringTags ?? []).filter((tag) => containsPhrase(signalText, tag.label));
+  const magnitudeSignal = /\bm [4-9](?: \d+)?\b/.test(signalText);
+  const hasDisruption = magnitudeSignal || disruptionTerms.some((term) => containsPhrase(signalText, term)) || monitoringTagMatches.length > 0;
+  const hasCountryLevelPathway = magnitudeSignal || countryLevelPathwayTerms.some((term) => containsPhrase(signalText, term));
   if (magnitudeSignal && !topics.includes('ENVIRONMENTAL')) topics.push('ENVIRONMENTAL');
   if (monitoringTagMatches.length > 0 && topics.length === 0) topics.push('OPERATIONAL');
   const matches: NewsRadarMatch[] = [];
@@ -200,7 +218,7 @@ export function matchArticleToSupplyChain(
     const named = containsPhrase(text, factory.name) && factoryNameCounts.get(normalizeRadarText(factory.name)) === 1;
     const countryTerm = matchingLocationTerm(text, factory.country);
     const cityCountry = containsPhrase(text, factory.city) && Boolean(countryTerm);
-    const countryOnly = !cityCountry && Boolean(countryTerm);
+    const countryOnly = !cityCountry && Boolean(countryTerm) && hasCountryLevelPathway;
     if (!named && !cityCountry && !countryOnly) continue;
     const method: NewsRadarMatchMethod = named ? 'UNIQUE_EXACT_NAME' : cityCountry ? 'EXACT_CITY_COUNTRY' : 'EXACT_COUNTRY';
     const terms = named ? [factory.name] : cityCountry ? [factory.city!, countryTerm!] : [countryTerm!];

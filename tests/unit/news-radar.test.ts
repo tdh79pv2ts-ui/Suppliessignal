@@ -33,6 +33,26 @@ describe('deterministic supply-chain news radar matching', () => {
     expect(match('Flooding disrupts factories in Vietnam')).toEqual(expect.arrayContaining([expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY' })]));
   });
 
+  it('rejects country-only politics and history even when deep article text contains disruption words', () => {
+    expect(matchArticleToSupplyChain({
+      title: 'Did Aristotle exist? China targets pseudo-history myths',
+      excerpt: 'A provincial department warned about conspiracy theories and public debate.',
+      normalizedText: 'The article later links to unrelated coverage about a factory shutdown and port closure.',
+    }, graph({
+      factories: [{ id: 'factory-china', name: 'Guangzhou Factory', country: 'China', city: 'Guangzhou' }],
+    })).matches).toHaveLength(0);
+  });
+
+  it('requires an explicit supply-chain pathway for country-only potential impact', () => {
+    const chinaGraph = graph({
+      factories: [{ id: 'factory-china', name: 'Guangzhou Factory', country: 'China', city: 'Guangzhou' }],
+    });
+    expect(match('Political conflict shapes university policy in China', chinaGraph)).toHaveLength(0);
+    expect(match('New tariffs disrupt textile exports from China', chinaGraph)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ entityType: 'FACTORY', matchMethod: 'EXACT_COUNTRY', relevanceLevel: 'MEDIUM' }),
+    ]));
+  });
+
   it('does not treat source metadata as evidence that an article affects the source country', () => {
     expect(matchArticleToSupplyChain(
       { title: 'Flooding disrupts industrial production' },
