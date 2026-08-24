@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { db } from '@suppliesignal/db';
 import { serverEnvSchema } from '@suppliesignal/shared';
-import { pocIngestionService } from './services/poc-ingestion.js';
+import { pocIngestionCoordinator } from './services/poc-ingestion-coordinator.js';
 
 serverEnvSchema.parse(process.env);
 
@@ -16,9 +16,9 @@ export async function runPocCycle() {
   if (running) return null;
   running = true;
   try {
-    const result = await pocIngestionService.runCycle(batchSize);
+    const result = await pocIngestionCoordinator.run(batchSize);
     console.info(
-      JSON.stringify({ operation: 'poc_ingestion_cycle', status: 'completed', ...result }),
+      JSON.stringify({ operation: 'poc_ingestion_cycle', ...result }),
     );
     return result;
   } catch (error) {

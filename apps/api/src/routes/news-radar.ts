@@ -1,4 +1,5 @@
 import { Router, type NextFunction, type Request, type Response, type Router as ExpressRouter } from 'express';
+import { z } from 'zod';
 import {
   customerParamsSchema,
   dailyBriefDateSchema,
@@ -21,6 +22,7 @@ import { requireAuth, requireCustomerAccess, requireRole, type ResolveUser } fro
 import { newsRadarService, type NewsRadarService } from '../services/news-radar.js';
 import { dailyBriefService, type DailyBriefService } from '../services/daily-brief.js';
 import { monitoringProfileService, type MonitoringProfileService } from '../services/monitoring-profile.js';
+import { pocIngestionCoordinator, type PocIngestionCoordinator } from '../services/poc-ingestion-coordinator.js';
 
 const asyncHandler = (fn: (request: Request, response: Response) => Promise<void>) =>
   (request: Request, response: Response, next: NextFunction) => void fn(request, response).catch(next);
@@ -39,6 +41,7 @@ export function createNewsRadarRouter(
   service: NewsRadarService = newsRadarService,
   briefs: DailyBriefService = dailyBriefService,
   monitoring: MonitoringProfileService = monitoringProfileService,
+  ingestion: PocIngestionCoordinator = pocIngestionCoordinator,
 ): ExpressRouter {
   const router = Router();
   router.use(requireAuth(resolveUser));
@@ -136,6 +139,16 @@ export function createNewsRadarRouter(
   }));
   router.post('/admin/news-radar/process-pending', requireRole('ADMIN'), asyncHandler(async (_request, response) => {
     response.status(202).json({ data: await service.processPending() });
+  }));
+  router.get('/admin/poc-ingestion/status', requireRole('ADMIN'), asyncHandler(async (_request, response) => {
+    response.json({ data: await ingestion.status() });
+  }));
+  router.post('/admin/poc-ingestion/run', requireRole('ADMIN'), asyncHandler(async (request, response) => {
+    const body = parse(z.object({
+      mode: z.enum(['INITIAL_FULL_LOAD', 'DELTA', 'DAILY_RECONCILIATION']).optional(),
+      batchSize: z.number().int().min(1).max(100).default(100),
+    }), request.body ?? {}, response);
+    if (body) response.status(202).json({ data: await ingestion.run(body.batchSize, body.mode) });
   }));
   return router;
 }

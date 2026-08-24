@@ -116,6 +116,30 @@ export function detectNewsRadarTopics(text: string): NewsRadarTopic[] {
     .map(([topic]) => topic);
 }
 
+const broaderPathwayTerms: Record<NewsRadarTopic, string[]> = {
+  GEOPOLITICAL: ['trade', 'border', 'sanction', 'shipping', 'port', 'supply chain', 'energy', 'commodity', 'export', 'import', 'factory', 'manufacturing', 'infrastructure'],
+  ECONOMIC: ['trade', 'freight', 'shipping', 'supply chain', 'energy', 'commodity', 'raw material', 'export', 'import', 'factory', 'manufacturing'],
+  OPERATIONAL: ['factory', 'production', 'manufacturing', 'supplier', 'supply chain', 'warehouse', 'port', 'logistics', 'infrastructure'],
+  LOGISTICS: ['port', 'shipping', 'freight', 'route', 'border', 'warehouse', 'logistics', 'supply chain'],
+  ENVIRONMENTAL: ['factory', 'production', 'manufacturing', 'supplier', 'port', 'shipping', 'route', 'road', 'rail', 'infrastructure', 'supply chain'],
+  TRADE: ['sanction', 'tariff', 'trade restriction', 'export control', 'export restriction', 'import restriction', 'customs restriction'],
+  TECHNOLOGY: ['semiconductor', 'export control', 'infrastructure', 'port', 'shipping', 'logistics', 'manufacturing', 'supply chain'],
+};
+
+export function isBroaderSupplyChainDevelopment(
+  article: { title: string; excerpt?: string | null; normalizedText?: string | null; translatedTitle?: string | null; translatedSummary?: string | null },
+  topics = detectNewsRadarTopics([article.title, article.excerpt, article.normalizedText, article.translatedTitle, article.translatedSummary].filter(Boolean).join(' ')),
+): boolean {
+  const text = normalizeRadarText([article.title, article.excerpt, article.normalizedText, article.translatedTitle, article.translatedSummary].filter(Boolean).join(' '));
+  if (topics.length === 0) return false;
+  const environmentalMagnitude = /\bm [5-9](?: \d+)?\b/.test(text) ||
+    ['major', 'severe', 'catastrophic'].some((term) => containsPhrase(text, term));
+  return topics.some((topic) =>
+    (topic === 'ENVIRONMENTAL' && environmentalMagnitude) ||
+    broaderPathwayTerms[topic].some((term) => containsPhrase(text, term)),
+  );
+}
+
 function customerStep(graph: NewsRadarGraph) {
   return { nodeType: 'CUSTOMER' as const, id: graph.customer.id, label: graph.customer.name };
 }

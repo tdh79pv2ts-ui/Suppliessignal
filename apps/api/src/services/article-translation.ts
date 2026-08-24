@@ -49,21 +49,67 @@ export class ArticleTranslationService {
   }
 
   async translatePending(limit = 100) {
-    if (!this.provider) return { articlesChecked: 0, translated: 0, failed: 0, skipped: true };
-    const preferences = await db.dailyBriefPreference.findMany({ where: { enabled: true }, select: { language: true } });
-    const targets = [...new Set(['en', ...preferences.map((preference) => preference.language)])];
-    const articles = await db.sourceArticle.findMany({ orderBy: { discoveredAt: 'asc' }, take: Math.min(100, Math.max(1, limit)) });
+    if (!this.provider) return { articlesChecked: 0, translated: 0, failed: 0, pending: 0, skipped: true };
+    const startedAt = new Date();
+    const targets = await this.targets();
+    const maximum = Math.min(100, Math.max(1, limit));
+    let remainingCapacity = maximum;
+    let articlesChecked = 0;
     let translated = 0;
     let failed = 0;
-    for (const article of articles) {
-      for (const targetLanguage of targets) {
-        if ((article.language?.split('-')[0]?.toLowerCase() ?? 'en') === targetLanguage) continue;
-        const existing = await db.sourceArticleTranslation.findUnique({ where: { sourceArticleId_targetLanguage: { sourceArticleId: article.id, targetLanguage } }, select: { status: true } });
-        if (existing?.status === 'COMPLETED') continue;
+    for (const targetLanguage of targets) {
+      if (remainingCapacity === 0) break;
+      const articles = await db.sourceArticle.findMany({
+        where: {
+          NOT: this.sourceLanguageWhere(targetLanguage),
+          OR: [
+            { translations: { none: { targetLanguage } } },
+            { translations: { some: { targetLanguage, status: 'PENDING' } } },
+            { translations: { some: { targetLanguage, status: 'FAILED', updatedAt: { lt: startedAt } } } },
+          ],
+        },
+        orderBy: [{ discoveredAt: 'asc' }, { id: 'asc' }],
+        take: remainingCapacity,
+      });
+      for (const article of articles) {
+        articlesChecked++;
+        remainingCapacity--;
         try { await this.translate(article.id, targetLanguage); translated++; } catch { failed++; }
       }
     }
-    return { articlesChecked: articles.length, translated, failed, skipped: false };
+    return {
+      articlesChecked,
+      translated,
+      failed,
+      pending: await this.pendingCount(targets),
+      skipped: false,
+    };
+  }
+
+  async pendingCount(targets?: string[]) {
+    if (!this.provider) return 0;
+    const requiredTargets = targets ?? await this.targets();
+    const counts = await Promise.all(requiredTargets.map((targetLanguage) =>
+      db.sourceArticle.count({
+        where: {
+          NOT: this.sourceLanguageWhere(targetLanguage),
+          translations: { none: { targetLanguage, status: 'COMPLETED' } },
+        },
+      }),
+    ));
+    return counts.reduce((sum, count) => sum + count, 0);
+  }
+
+  private async targets() {
+    const preferences = await db.dailyBriefPreference.findMany({ where: { enabled: true }, select: { language: true } });
+    return [...new Set(['en', ...preferences.map((preference) => preference.language)])];
+  }
+
+  private sourceLanguageWhere(targetLanguage: string) {
+    if (targetLanguage === 'en') {
+      return { OR: [{ language: null }, { language: { startsWith: 'en', mode: 'insensitive' as const } }] };
+    }
+    return { language: { startsWith: targetLanguage, mode: 'insensitive' as const } };
   }
 }
 

@@ -1,11 +1,12 @@
 # Staging deployment
 
-This runbook prepares one stable, browser-accessible staging environment. It does not create production infrastructure, deploy workers, or activate source collection, extraction, or Event processing.
+This runbook prepares one stable, browser-accessible staging environment plus the explicitly approved POC ingestion worker. It does not create production infrastructure or activate extraction or Event processing.
 
 ## Topology and prerequisites
 
 - Web: one Vercel project from this repository.
-- API: one Railway service from this repository.
+- API: one Railway web service from this repository.
+- POC ingestion: one Railway worker service from the same revision and environment.
 - Database and Auth: one dedicated Supabase staging project that is never shared with production.
 - Runtime: Node.js 22+ and the repository-pinned `pnpm@11.16.0` (Corepack/package-manager detection uses `packageManager` in the root `package.json`).
 - Deploy only a revision for which GitHub CI has passed.
@@ -120,7 +121,7 @@ EVENT_MIN_CLAIM_CONFIDENCE=0.60
 
 `SUPABASE_SERVICE_ROLE_KEY` is not used by the current API and should be omitted. `OPENAI_API_KEY` is not required while extraction is disabled; enabling extraction still makes it mandatory. The API fails fast if Supabase settings are missing or development auth is enabled. `APP_ENV=staging` also requires `NODE_ENV=production`.
 
-Deploy only this API process. Do not create Railway services for `start:worker`, `start:extraction-worker`, or `start:event-worker`. The source worker has no activation environment flag: it selects database Sources with `active=true` and `collectionEnabled=true`, so keeping all staging Sources collection-disabled is authoritative. Extraction and Event worker activation flags remain false.
+Deploy the API process and one dedicated POC worker. Point the worker service at `railway.poc-worker.json`; use the same server-only environment values and set `POC_ARTICLE_BATCH_SIZE=100`. The API service alone runs `pnpm db:deploy`; the worker does not run migrations. Its database lease makes overlapping replicas safe and its customer source preferences remain the authoritative allow-list. Do not also deploy `start:worker` or `start:news-radar-worker`, because the POC worker already owns collection, translation and relevance. Do not create services for `start:extraction-worker` or `start:event-worker`; their activation flags remain false.
 
 After Vercel has its stable domain, update `WEB_ORIGIN` to that exact origin and redeploy the API. Never use `*` or a `*.vercel.app` pattern. If the stable frontend domain changes, update `WEB_ORIGIN` again.
 
@@ -175,7 +176,7 @@ After deployment:
 7. Confirm a `CUSTOMER` cannot read global sources, Claims, POC, or Events; reviewers retain only explicit customer memberships; ADMIN retains platform-wide access.
 8. Send a browser request from an unexpected Origin and confirm the response has no matching `Access-Control-Allow-Origin`; do not broaden CORS.
 9. Search `apps/web/dist` for a known test marker used temporarily for each server secret and confirm no marker is present. Never print real secret values during this check.
-10. Confirm Railway has no worker service and all Source records remain `collection_enabled=false`.
+10. Confirm the POC worker logs one database-owned cycle, `GET /api/admin/poc-ingestion/status` reports the expected mode/timestamps, and enabled-source controls agree with the worker counts.
 
 The health endpoint is process liveness, not database readiness. No second readiness route is added because Railway's migration gate plus authenticated application smoke tests cover database availability without adding another public database probe.
 
@@ -183,6 +184,6 @@ The health endpoint is process liveness, not database readiness. No second readi
 
 - Deployment is manual; this repository does not provision Vercel, Railway, or Supabase.
 - One exact CORS origin means arbitrary Vercel preview URLs cannot call the API.
-- Workers are intentionally absent from staging; collection, extraction, and Event processing require later explicit operational approval.
+- The POC worker collects only verified enabled RSS/Atom endpoints. Public WEB/API/search discovery remains unavailable until a technically and legally verified connector is configured.
 - The staging database still needs normal Supabase backup, retention, access-control, and cost monitoring decisions.
 - Staging is a review environment, not production. Phase 6 remains unimplemented.

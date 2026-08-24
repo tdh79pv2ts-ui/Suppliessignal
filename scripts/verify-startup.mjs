@@ -84,4 +84,9 @@ await withDisposablePostgres(async ({ env }) => {
   await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,500);radarWorker.once('exit',(code)=>{clearTimeout(timer);reject(new Error(`News radar worker exited early with code ${code}`));});});
   radarWorker.kill('SIGTERM'); await new Promise((resolve)=>radarWorker.once('exit',resolve));
   console.log('News radar and daily brief worker startup verified');
+  const pocWorker = spawn(process.execPath, ['apps/api/dist/apps/api/src/poc-worker.js'], { env: { ...apiEnv, POC_ARTICLE_BATCH_SIZE: '100' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  pocWorker.stdout.pipe(process.stdout); pocWorker.stderr.pipe(process.stderr);
+  await new Promise((resolve,reject)=>{const timer=setTimeout(resolve,750);pocWorker.once('exit',(code)=>{clearTimeout(timer);reject(new Error(`POC ingestion worker exited early with code ${code}`));});});
+  pocWorker.kill('SIGTERM'); await new Promise((resolve)=>pocWorker.once('exit',resolve));
+  console.log('POC initial/delta/reconciliation worker startup verified');
 });

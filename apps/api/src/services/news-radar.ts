@@ -7,13 +7,14 @@ import { buildRegionalProfile, sourceRecommendation } from './regional-source-pr
 import { monitoringProfileService } from './monitoring-profile.js';
 import { buildIntelligenceView, type IntelligenceArticleInput } from './intelligence-view.js';
 import {
+  isBroaderSupplyChainDevelopment,
   matchArticleToSupplyChain,
   type NewsRadarGraph,
   type NewsRadarMatch,
 } from './news-radar-matching.js';
 
 const LEASE_MS = 2 * 60 * 1000;
-export const NEWS_RADAR_POLICY_VERSION = '3.0';
+export const NEWS_RADAR_POLICY_VERSION = '3.1';
 
 const exposureInclude = {
   sourceArticle: { include: { source: true, translations: { where: { status: 'COMPLETED' as const } } } },
@@ -253,7 +254,14 @@ export class NewsRadarService {
           translatedTitle: english?.translatedTitle ?? null,
           translatedSummary: english?.translatedSummary ?? null,
         }, graph);
-        result.topics.forEach((value) => topics.add(value));
+        const hasCustomerImpact = result.matches.some((match) => match.relevanceLevel === 'HIGH' || match.relevanceLevel === 'MEDIUM');
+        if (hasCustomerImpact || isBroaderSupplyChainDevelopment({
+          title: article.title,
+          excerpt: article.excerpt,
+          normalizedText: article.normalizedText,
+          translatedTitle: english?.translatedTitle ?? null,
+          translatedSummary: english?.translatedSummary ?? null,
+        }, result.topics)) result.topics.forEach((value) => topics.add(value));
         result.detectedTerms.forEach((value) => terms.add(value));
         result.detectedLocations.forEach((value) => locations.add(value));
         for (const match of result.matches) {
@@ -278,12 +286,7 @@ export class NewsRadarService {
 
   async processPending(limit = 20) {
     const articles = await db.sourceArticle.findMany({
-      where: { OR: [
-        { newsRadarProcessing: null },
-        { newsRadarProcessing: { policyVersion: { not: NEWS_RADAR_POLICY_VERSION } } },
-        { newsRadarProcessing: { status: 'FAILED' } },
-        { newsRadarProcessing: { status: 'RUNNING', leaseExpiresAt: { lt: new Date() } } },
-      ] },
+      where: this.pendingWhere(),
       select: { id: true }, orderBy: { discoveredAt: 'asc' }, take: Math.min(100, Math.max(1, limit)),
     });
     const customerGraphs = articles.length > 0 ? await this.customerGraphs() : [];
@@ -297,7 +300,20 @@ export class NewsRadarService {
         else result.failed++;
       }
     }
-    return result;
+    return { ...result, pending: await this.pendingCount() };
+  }
+
+  pendingCount() {
+    return db.sourceArticle.count({ where: this.pendingWhere() });
+  }
+
+  private pendingWhere(): Prisma.SourceArticleWhereInput {
+    return { OR: [
+      { newsRadarProcessing: null },
+      { newsRadarProcessing: { policyVersion: { not: NEWS_RADAR_POLICY_VERSION } } },
+      { newsRadarProcessing: { status: 'FAILED' } },
+      { newsRadarProcessing: { status: 'RUNNING', leaseExpiresAt: { lt: new Date() } } },
+    ] };
   }
 
   private async customerGraphs() {

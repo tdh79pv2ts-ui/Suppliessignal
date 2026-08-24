@@ -31,6 +31,7 @@ describe('BSK POC ingestion cycle', () => {
     );
 
     await expect(service.runCycle()).resolves.toMatchObject({
+      mode: 'DELTA',
       sourcesChecked: 2,
       sourcesCollected: 1,
       articlesProcessed: 2,
@@ -40,6 +41,59 @@ describe('BSK POC ingestion cycle', () => {
     expect(collect).toHaveBeenCalledWith('due');
     expect(collect).not.toHaveBeenCalledWith('fresh');
     expect(order).toEqual(['collect:due', 'translate', 'relevance']);
+  });
+
+  it('drains translation and relevance work across bounded batches', async () => {
+    let translationBatch = 0;
+    let relevanceBatch = 0;
+    const translations = { translatePending: vi.fn(async () => {
+      translationBatch++;
+      return translationBatch === 1
+        ? { articlesChecked: 100, translated: 100, failed: 0, pending: 40, skipped: false }
+        : { articlesChecked: 40, translated: 40, failed: 0, pending: 0, skipped: false };
+    }) };
+    const relevance = { processPending: vi.fn(async () => {
+      relevanceBatch++;
+      return relevanceBatch === 1
+        ? { articlesFound: 100, processed: 100, skipped: 0, failed: 0, exposuresCreated: 6, pending: 40 }
+        : { articlesFound: 40, processed: 40, skipped: 0, failed: 0, exposuresCreated: 2, pending: 0 };
+    }) };
+    const service = new PocIngestionService(
+      { collect: vi.fn() } as never,
+      relevance as never,
+      undefined,
+      translations as never,
+      (async () => ({ expected: 0, checked: 0, collected: 0, skipped: 0, failed: 0, itemsDiscovered: 0, itemsCreated: 0, itemsSkipped: 0, itemsFailed: 0, failures: [] })) as never,
+    );
+
+    await expect(service.runCycle(100)).resolves.toMatchObject({
+      articlesTranslated: 140,
+      articlesProcessed: 140,
+      relevanceMatchesCreated: 8,
+      pendingBacklog: 0,
+      backlogDrained: true,
+      batchesProcessed: 2,
+    });
+    expect(translations.translatePending).toHaveBeenCalledTimes(2);
+    expect(relevance.processPending).toHaveBeenCalledTimes(2);
+  });
+
+  it('forces every enabled source during initial load and daily reconciliation', async () => {
+    const collection = vi.fn(async () => ({ expected: 2, checked: 2, collected: 2, skipped: 0, failed: 0, itemsDiscovered: 3, itemsCreated: 2, itemsSkipped: 1, itemsFailed: 0, failures: [] }));
+    const service = new PocIngestionService(
+      { collect: vi.fn() } as never,
+      { processPending: vi.fn(async () => ({ articlesFound: 0, processed: 0, skipped: 0, failed: 0, exposuresCreated: 0, pending: 0 })) } as never,
+      undefined,
+      { translatePending: vi.fn(async () => ({ articlesChecked: 0, translated: 0, failed: 0, pending: 0, skipped: true })) } as never,
+      collection as never,
+    );
+
+    const initial = await service.runCycle(100, 'INITIAL_FULL_LOAD');
+    const daily = await service.runCycle(100, 'DAILY_RECONCILIATION');
+    expect(collection.mock.calls[0]?.[2]).toEqual({ force: true });
+    expect(collection.mock.calls[1]?.[2]).toEqual({ force: true });
+    expect(initial).toMatchObject({ articlesDiscovered: 2, duplicatesPrevented: 1 });
+    expect(daily.mode).toBe('DAILY_RECONCILIATION');
   });
 
   it('records one source failure and still updates article relevance', async () => {

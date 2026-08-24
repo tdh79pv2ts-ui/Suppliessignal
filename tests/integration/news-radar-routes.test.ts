@@ -6,6 +6,7 @@ import { createNewsRadarRouter } from '../../apps/api/src/routes/news-radar';
 import type { NewsRadarService } from '../../apps/api/src/services/news-radar';
 import type { DailyBriefService } from '../../apps/api/src/services/daily-brief';
 import type { MonitoringProfileService } from '../../apps/api/src/services/monitoring-profile';
+import type { PocIngestionCoordinator } from '../../apps/api/src/services/poc-ingestion-coordinator';
 
 const customerA = '11111111-1111-4111-8111-111111111111';
 const customerB = '22222222-2222-4222-8222-222222222222';
@@ -16,8 +17,9 @@ function app(role: AuthenticatedUser['role'], memberships = [customerA], authent
   const service = new Proxy({}, { get: () => vi.fn(async () => []) }) as NewsRadarService;
   const briefs = new Proxy({}, { get: () => vi.fn(async () => ({})) }) as DailyBriefService;
   const monitoring = new Proxy({}, { get: () => vi.fn(async () => ({})) }) as MonitoringProfileService;
+  const ingestion = new Proxy({}, { get: () => vi.fn(async () => ({})) }) as PocIngestionCoordinator;
   const instance = express(); instance.use(express.json());
-  instance.use('/api', createNewsRadarRouter(async () => authenticated ? ({ id: userId, email: 'radar@example.test', name: 'Radar', role, customerIds: memberships }) : null, service, briefs, monitoring));
+  instance.use('/api', createNewsRadarRouter(async () => authenticated ? ({ id: userId, email: 'radar@example.test', name: 'Radar', role, customerIds: memberships }) : null, service, briefs, monitoring, ingestion));
   return instance;
 }
 
@@ -33,6 +35,9 @@ describe('news radar authorization', () => {
   it('requires ADMIN to process global articles', async () => {
     expect((await request(app('REVIEWER')).post(`/api/admin/news-radar/articles/${articleId}/process`)).status).toBe(403);
     expect((await request(app('ADMIN', [])).post(`/api/admin/news-radar/articles/${articleId}/process`)).status).toBe(202);
+    expect((await request(app('REVIEWER')).get('/api/admin/poc-ingestion/status')).status).toBe(403);
+    expect((await request(app('ADMIN', [])).get('/api/admin/poc-ingestion/status')).status).toBe(200);
+    expect((await request(app('ADMIN', [])).post('/api/admin/poc-ingestion/run').send({ mode: 'DELTA', batchSize: 50 })).status).toBe(202);
   });
   it('rejects unauthenticated radar access', async () => {
     expect((await request(app('CUSTOMER', [customerA], false)).get(`/api/customers/${customerA}/news-radar`)).status).toBe(401);

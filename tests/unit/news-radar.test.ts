@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { matchArticleToSupplyChain, type NewsRadarGraph } from '../../apps/api/src/services/news-radar-matching';
+import { isBroaderSupplyChainDevelopment, matchArticleToSupplyChain, type NewsRadarGraph } from '../../apps/api/src/services/news-radar-matching';
 
 function graph(overrides: Partial<NewsRadarGraph> = {}): NewsRadarGraph {
   return {
@@ -113,5 +113,25 @@ describe('deterministic supply-chain news radar matching', () => {
     }))).toEqual(expect.arrayContaining([
       expect.objectContaining({ entityType: 'FACTORY', relevanceLevel: 'MEDIUM' }),
     ]));
+  });
+});
+
+describe('controlled broader-development classification', () => {
+  it('accepts material trade, logistics and major natural-disaster pathways', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'New export controls restrict semiconductor supply chains' })).toBe(true);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Conflict delays Red Sea shipping and freight routes' })).toBe(true);
+    expect(isBroaderSupplyChainDevelopment({ title: 'M 6.4 earthquake strikes coastal region' })).toBe(true);
+  });
+
+  it('rejects generic politics, crime, sports and lifestyle coverage', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'Election debate focuses on the history of war' })).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Police investigate fire after local crime' })).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Club faces conflict before championship final' })).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Lifestyle report discusses inflation and travel' })).toBe(false);
+  });
+
+  it('requires an operational supply-chain pathway rather than a disruption keyword alone', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'Fire disrupts regional manufacturing production' })).toBe(true);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Fire closes a private residence' })).toBe(false);
   });
 });

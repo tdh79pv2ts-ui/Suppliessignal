@@ -124,6 +124,19 @@ enum NewsRadarRelevanceLevel {
   LOW
 }
 
+enum PocIngestionMode {
+  INITIAL_FULL_LOAD
+  DELTA
+  DAILY_RECONCILIATION
+}
+
+enum PocIngestionRunStatus {
+  RUNNING
+  COMPLETED
+  PARTIAL
+  FAILED
+}
+
 enum MonitoringTagType {
   AUTO
   SUGGESTED
@@ -507,10 +520,10 @@ model User {
 }
 
 model Customer {
-  id                    String                  @id @default(uuid()) @db.Uuid
+  id                    String                     @id @default(uuid()) @db.Uuid
   name                  String
   description           String?
-  defaultAlertThreshold Int                     @default(60) @map("default_alert_threshold")
+  defaultAlertThreshold Int                        @default(60) @map("default_alert_threshold")
   memberships           CustomerMembership[]
   suppliers             Supplier[]
   companies             Company[]
@@ -521,7 +534,7 @@ model Customer {
   products              Product[]
   materials             Material[]
   routes                Route[]
-  graphRevision         BigInt                  @default(0) @map("graph_revision")
+  graphRevision         BigInt                     @default(0) @map("graph_revision")
   exposures             CustomerExposure[]
   exposureCandidates    ExposureCandidate[]
   graphIdentities       CustomerGraphIdentity[]
@@ -531,8 +544,8 @@ model Customer {
   dailyBriefs           DailyBrief[]
   monitoringTags        CustomerMonitoringTag[]
   sourcePreferences     CustomerSourcePreference[]
-  createdAt             DateTime                @default(now()) @map("created_at")
-  updatedAt             DateTime                @updatedAt @map("updated_at")
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
 
   @@map("customers")
 }
@@ -948,51 +961,94 @@ model FactoryLocation {
 }
 
 model Source {
-  id                         String                @id @default(uuid()) @db.Uuid
+  id                         String                     @id @default(uuid()) @db.Uuid
   name                       String
-  sourceType                 SourceType            @map("source_type")
-  baseUrl                    String                @map("base_url")
-  feedUrl                    String?               @map("feed_url")
+  sourceType                 SourceType                 @map("source_type")
+  baseUrl                    String                     @map("base_url")
+  feedUrl                    String?                    @map("feed_url")
   country                    String?
   region                     String?
   industry                   String?
   language                   String?
   category                   SourceCategory
   reliability                SourceReliability
-  active                     Boolean               @default(true)
-  collectionEnabled          Boolean               @default(false) @map("collection_enabled")
-  collectionIntervalMinutes  Int?                  @default(15) @map("collection_interval_minutes")
-  lastCollectedAt            DateTime?             @map("last_collected_at")
-  lastSuccessfulCollectionAt DateTime?             @map("last_successful_collection_at")
-  lastFailureAt              DateTime?             @map("last_failure_at")
-  consecutiveFailures        Int                   @default(0) @map("consecutive_failures")
+  active                     Boolean                    @default(true)
+  collectionEnabled          Boolean                    @default(false) @map("collection_enabled")
+  collectionIntervalMinutes  Int?                       @default(15) @map("collection_interval_minutes")
+  lastCollectedAt            DateTime?                  @map("last_collected_at")
+  lastSuccessfulCollectionAt DateTime?                  @map("last_successful_collection_at")
+  lastFailureAt              DateTime?                  @map("last_failure_at")
+  consecutiveFailures        Int                        @default(0) @map("consecutive_failures")
   articles                   SourceArticle[]
   collectionRuns             SourceCollectionRun[]
   customerPreferences        CustomerSourcePreference[]
-  createdAt                  DateTime              @default(now()) @map("created_at")
-  updatedAt                  DateTime              @updatedAt @map("updated_at")
+  createdAt                  DateTime                   @default(now()) @map("created_at")
+  updatedAt                  DateTime                   @updatedAt @map("updated_at")
 
   @@index([active, collectionEnabled])
   @@index([sourceType, category])
   @@map("sources")
 }
 
+model PocIngestionState {
+  id                       String                 @id @default("POC_V1")
+  ownerToken               String?                @map("owner_token") @db.Uuid
+  leaseExpiresAt           DateTime?              @map("lease_expires_at")
+  lastRunStartedAt         DateTime?              @map("last_run_started_at")
+  lastRunCompletedAt       DateTime?              @map("last_run_completed_at")
+  lastRunStatus            PocIngestionRunStatus? @map("last_run_status")
+  lastFullLoadAt           DateTime?              @map("last_full_load_at")
+  lastSuccessfulDeltaAt    DateTime?              @map("last_successful_delta_at")
+  lastFullReconciliationAt DateTime?              @map("last_full_reconciliation_at")
+  pendingBacklog           Int                    @default(0) @map("pending_backlog")
+  createdAt                DateTime               @default(now()) @map("created_at")
+  updatedAt                DateTime               @updatedAt @map("updated_at")
+
+  @@map("poc_ingestion_state")
+}
+
+model PocIngestionRun {
+  id                        String                @id @default(uuid()) @db.Uuid
+  mode                      PocIngestionMode
+  status                    PocIngestionRunStatus @default(RUNNING)
+  startedAt                 DateTime              @default(now()) @map("started_at")
+  completedAt               DateTime?             @map("completed_at")
+  sourcesExpected           Int                   @default(0) @map("sources_expected")
+  sourcesChecked            Int                   @default(0) @map("sources_checked")
+  sourcesCollected          Int                   @default(0) @map("sources_collected")
+  sourcesFailed             Int                   @default(0) @map("sources_failed")
+  discoveryQueriesExpected  Int                   @default(0) @map("discovery_queries_expected")
+  discoveryQueriesCompleted Int                   @default(0) @map("discovery_queries_completed")
+  articlesDiscovered        Int                   @default(0) @map("articles_discovered")
+  articlesProcessed         Int                   @default(0) @map("articles_processed")
+  articlesFailed            Int                   @default(0) @map("articles_failed")
+  duplicatesPrevented       Int                   @default(0) @map("duplicates_prevented")
+  pendingBacklog            Int                   @default(0) @map("pending_backlog")
+  errorCode                 String?               @map("error_code")
+  errorMessage              String?               @map("error_message")
+  createdAt                 DateTime              @default(now()) @map("created_at")
+
+  @@index([startedAt])
+  @@index([mode, status, completedAt])
+  @@map("poc_ingestion_runs")
+}
+
 model CustomerMonitoringTag {
-  id            String                @id @default(uuid()) @db.Uuid
-  customerId    String                @map("customer_id") @db.Uuid
-  type          MonitoringTagType
-  key           String
-  label         String
-  normalizedLabel String              @map("normalized_label")
-  category      MonitoringTagCategory
-  status        MonitoringTagStatus
-  reason        String
-  derivedActive Boolean               @default(true) @map("derived_active")
-  createdByUserId String?             @map("created_by_user_id") @db.Uuid
-  customer      Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdByUser User?                 @relation("MonitoringTagCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  createdAt     DateTime              @default(now()) @map("created_at")
-  updatedAt     DateTime              @updatedAt @map("updated_at")
+  id              String                @id @default(uuid()) @db.Uuid
+  customerId      String                @map("customer_id") @db.Uuid
+  type            MonitoringTagType
+  key             String
+  label           String
+  normalizedLabel String                @map("normalized_label")
+  category        MonitoringTagCategory
+  status          MonitoringTagStatus
+  reason          String
+  derivedActive   Boolean               @default(true) @map("derived_active")
+  createdByUserId String?               @map("created_by_user_id") @db.Uuid
+  customer        Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdByUser   User?                 @relation("MonitoringTagCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
 
   @@unique([customerId, type, key])
   @@index([customerId, type, status, derivedActive])
@@ -1000,15 +1056,15 @@ model CustomerMonitoringTag {
 }
 
 model CustomerSourcePreference {
-  customerId String   @map("customer_id") @db.Uuid
-  sourceId   String   @map("source_id") @db.Uuid
-  enabled    Boolean  @default(true)
-  recommended Boolean @default(false)
-  reason     String?
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  source     Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  customerId  String   @map("customer_id") @db.Uuid
+  sourceId    String   @map("source_id") @db.Uuid
+  enabled     Boolean  @default(true)
+  recommended Boolean  @default(false)
+  reason      String?
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  source      Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@id([customerId, sourceId])
   @@index([sourceId, enabled])
@@ -1076,37 +1132,37 @@ model NewsRadarArticleProcessing {
 }
 
 model NewsRadarExposure {
-  id               String               @id @default(uuid()) @db.Uuid
-  customerId       String               @map("customer_id") @db.Uuid
-  sourceArticleId  String               @map("source_article_id") @db.Uuid
-  matchKey         String               @map("match_key")
-  policyVersion    String               @map("policy_version")
-  entityType       NewsRadarEntityType  @map("entity_type")
+  id               String                  @id @default(uuid()) @db.Uuid
+  customerId       String                  @map("customer_id") @db.Uuid
+  sourceArticleId  String                  @map("source_article_id") @db.Uuid
+  matchKey         String                  @map("match_key")
+  policyVersion    String                  @map("policy_version")
+  entityType       NewsRadarEntityType     @map("entity_type")
   topic            NewsRadarTopic
-  matchMethod      NewsRadarMatchMethod @map("match_method")
-  confidence       Decimal              @db.Decimal(4, 3)
+  matchMethod      NewsRadarMatchMethod    @map("match_method")
+  confidence       Decimal                 @db.Decimal(4, 3)
   relevanceLevel   NewsRadarRelevanceLevel @map("relevance_level")
   reason           String
-  matchedTerms     String[]             @map("matched_terms")
-  pathSnapshot     Json                 @map("path_snapshot")
-  supplierId       String?              @map("supplier_id") @db.Uuid
-  factoryId        String?              @map("factory_id") @db.Uuid
-  productId        String?              @map("product_id") @db.Uuid
-  materialId       String?              @map("material_id") @db.Uuid
-  routeId          String?              @map("route_id") @db.Uuid
-  routePortRouteId String?              @map("route_port_route_id") @db.Uuid
-  portId           String?              @map("port_id") @db.Uuid
-  customer         Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  sourceArticle    SourceArticle        @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
-  supplier         Supplier?            @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
-  factory          Factory?             @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
-  product          Product?             @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
-  material         Material?            @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
-  route            Route?               @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
-  routePort        RoutePort?           @relation(fields: [routePortRouteId, portId, customerId], references: [routeId, portId, customerId], onDelete: Restrict)
+  matchedTerms     String[]                @map("matched_terms")
+  pathSnapshot     Json                    @map("path_snapshot")
+  supplierId       String?                 @map("supplier_id") @db.Uuid
+  factoryId        String?                 @map("factory_id") @db.Uuid
+  productId        String?                 @map("product_id") @db.Uuid
+  materialId       String?                 @map("material_id") @db.Uuid
+  routeId          String?                 @map("route_id") @db.Uuid
+  routePortRouteId String?                 @map("route_port_route_id") @db.Uuid
+  portId           String?                 @map("port_id") @db.Uuid
+  customer         Customer                @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  sourceArticle    SourceArticle           @relation(fields: [sourceArticleId], references: [id], onDelete: Restrict)
+  supplier         Supplier?               @relation(fields: [supplierId, customerId], references: [id, customerId], onDelete: Restrict)
+  factory          Factory?                @relation(fields: [factoryId, customerId], references: [id, customerId], onDelete: Restrict)
+  product          Product?                @relation(fields: [productId, customerId], references: [id, customerId], onDelete: Restrict)
+  material         Material?               @relation(fields: [materialId, customerId], references: [id, customerId], onDelete: Restrict)
+  route            Route?                  @relation(fields: [routeId, customerId], references: [id, customerId], onDelete: Restrict)
+  routePort        RoutePort?              @relation(fields: [routePortRouteId, portId, customerId], references: [routeId, portId, customerId], onDelete: Restrict)
   dailyBriefItems  DailyBriefItem[]
-  createdAt        DateTime             @default(now()) @map("created_at")
-  updatedAt        DateTime             @updatedAt @map("updated_at")
+  createdAt        DateTime                @default(now()) @map("created_at")
+  updatedAt        DateTime                @updatedAt @map("updated_at")
 
   @@unique([customerId, sourceArticleId, matchKey, policyVersion])
   @@unique([id, customerId])
@@ -1136,20 +1192,20 @@ model SourceArticleTranslation {
 }
 
 model DailyBriefPreference {
-  id           String             @id @default(uuid()) @db.Uuid
-  userId       String             @map("user_id") @db.Uuid
-  customerId   String             @map("customer_id") @db.Uuid
-  enabled      Boolean            @default(false)
-  deliveryTime String             @default("08:00") @map("delivery_time")
-  timezone     String             @default("UTC")
+  id           String               @id @default(uuid()) @db.Uuid
+  userId       String               @map("user_id") @db.Uuid
+  customerId   String               @map("customer_id") @db.Uuid
+  enabled      Boolean              @default(false)
+  deliveryTime String               @default("08:00") @map("delivery_time")
+  timezone     String               @default("UTC")
   email        String
-  language     String             @default("en")
-  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  customer     Customer           @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  membership   CustomerMembership @relation(fields: [userId, customerId], references: [userId, customerId], onDelete: Cascade)
+  language     String               @default("en")
+  user         User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  customer     Customer             @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  membership   CustomerMembership   @relation(fields: [userId, customerId], references: [userId, customerId], onDelete: Cascade)
   deliveries   DailyBriefDelivery[]
-  createdAt    DateTime           @default(now()) @map("created_at")
-  updatedAt    DateTime           @updatedAt @map("updated_at")
+  createdAt    DateTime             @default(now()) @map("created_at")
+  updatedAt    DateTime             @updatedAt @map("updated_at")
 
   @@unique([userId, customerId])
   @@unique([id, customerId, userId])
@@ -1158,17 +1214,17 @@ model DailyBriefPreference {
 }
 
 model DailyBrief {
-  id                  String           @id @default(uuid()) @db.Uuid
-  customerId          String           @map("customer_id") @db.Uuid
-  briefDate           DateTime         @map("brief_date") @db.Date
-  generatedAt         DateTime         @default(now()) @map("generated_at")
-  graphRevision       BigInt           @map("graph_revision")
-  supplyChainSnapshot Json             @map("supply_chain_snapshot")
-  customer            Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  id                  String               @id @default(uuid()) @db.Uuid
+  customerId          String               @map("customer_id") @db.Uuid
+  briefDate           DateTime             @map("brief_date") @db.Date
+  generatedAt         DateTime             @default(now()) @map("generated_at")
+  graphRevision       BigInt               @map("graph_revision")
+  supplyChainSnapshot Json                 @map("supply_chain_snapshot")
+  customer            Customer             @relation(fields: [customerId], references: [id], onDelete: Restrict)
   items               DailyBriefItem[]
   deliveries          DailyBriefDelivery[]
-  createdAt           DateTime         @default(now()) @map("created_at")
-  updatedAt           DateTime         @updatedAt @map("updated_at")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
 
   @@unique([customerId, briefDate])
   @@unique([id, customerId])
@@ -1177,24 +1233,24 @@ model DailyBrief {
 }
 
 model DailyBriefDelivery {
-  id            String                   @id @default(uuid()) @db.Uuid
-  preferenceId  String                   @map("preference_id") @db.Uuid
-  briefId       String                   @map("brief_id") @db.Uuid
-  customerId    String                   @map("customer_id") @db.Uuid
-  userId        String                   @map("user_id") @db.Uuid
-  email         String
-  language      String
-  status        DailyBriefDeliveryStatus @default(PENDING)
-  provider      String?
-  providerId    String?                  @map("provider_id")
-  sentAt        DateTime?                @map("sent_at")
-  errorCode     String?                  @map("error_code")
-  preference    DailyBriefPreference     @relation(fields: [preferenceId, customerId, userId], references: [id, customerId, userId], onDelete: Restrict)
-  brief         DailyBrief               @relation(fields: [briefId, customerId], references: [id, customerId], onDelete: Restrict)
-  customer      Customer                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  user          User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
-  createdAt     DateTime                 @default(now()) @map("created_at")
-  updatedAt     DateTime                 @updatedAt @map("updated_at")
+  id           String                   @id @default(uuid()) @db.Uuid
+  preferenceId String                   @map("preference_id") @db.Uuid
+  briefId      String                   @map("brief_id") @db.Uuid
+  customerId   String                   @map("customer_id") @db.Uuid
+  userId       String                   @map("user_id") @db.Uuid
+  email        String
+  language     String
+  status       DailyBriefDeliveryStatus @default(PENDING)
+  provider     String?
+  providerId   String?                  @map("provider_id")
+  sentAt       DateTime?                @map("sent_at")
+  errorCode    String?                  @map("error_code")
+  preference   DailyBriefPreference     @relation(fields: [preferenceId, customerId, userId], references: [id, customerId, userId], onDelete: Restrict)
+  brief        DailyBrief               @relation(fields: [briefId, customerId], references: [id, customerId], onDelete: Restrict)
+  customer     Customer                 @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  user         User                     @relation(fields: [userId], references: [id], onDelete: Restrict)
+  createdAt    DateTime                 @default(now()) @map("created_at")
+  updatedAt    DateTime                 @updatedAt @map("updated_at")
 
   @@unique([preferenceId, briefId])
   @@index([customerId, status, createdAt])
