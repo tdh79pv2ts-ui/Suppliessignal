@@ -22,6 +22,9 @@
     "poc:validate-data": "tsx scripts/validate-poc-data.ts",
     "poc:verify-data": "node scripts/verify-poc-data.mjs",
     "poc:benchmark": "tsx scripts/evaluate-poc-benchmark.ts",
+    "poc:benchmark:rules": "tsx scripts/evaluate-poc-rules-offline.ts",
+    "poc:benchmark:discovery": "tsx scripts/evaluate-poc-discovery-recall.ts",
+    "poc:reprocess-radar": "tsx scripts/reprocess-poc-news-radar.ts",
     "verify:start": "node scripts/verify-startup.mjs"
   },
   "devDependencies": {

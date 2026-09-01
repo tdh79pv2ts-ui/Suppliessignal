@@ -113,7 +113,9 @@ describe.sequential('source intelligence with PostgreSQL', () => {
     const healthy = await db.source.findUniqueOrThrow({
       where: { id: source.id },
     });
-    expect(sourceHealth(healthy)).toBe('HEALTHY');
+    expect(healthy.lastSuccessfulCollectionAt).toBeNull();
+    expect(healthy.consecutiveFailures).toBe(2);
+    expect(sourceHealth(healthy)).toBe('DEGRADED');
     const other = await service.createSource({
       name: 'Other publisher',
       sourceType: 'MANUAL',

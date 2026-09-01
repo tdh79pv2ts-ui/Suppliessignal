@@ -41,6 +41,17 @@ describe('deterministic ingestion', () => {
     );
     expect(result).toEqual({ items: [], failedItems: 1 });
   });
+  it.each([
+    ['မြန်မာ စက်ရုံသတင်း', 'my'],
+    ['বাংলাদেশ কারখানা সংবাদ', 'bn'],
+    ['中国工厂新闻', 'zh'],
+  ])('detects the language script for %s', (title, language) => {
+    const result = parseFeed(
+      `<rss><channel><item><title>${title}</title><link>https://public.example/language</link><pubDate>Mon, 24 Aug 2026 08:00:00 GMT</pubDate></item></channel></rss>`,
+      'https://public.example/',
+    );
+    expect(result.items[0]?.language).toBe(language);
+  });
   it('normalizes URLs/text and hashes deterministically', () => {
     expect(
       normalizeUrl('HTTPS://PUBLIC.EXAMPLE:443/a/?utm_source=x#fragment'),

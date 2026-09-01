@@ -62,7 +62,9 @@ pnpm db:seed         # seed demo graph/users and verified real-news source confi
 pnpm db:verify-migrations # clean and Phase 5 hardening upgrade verification
 pnpm poc:validate-data # database-backed BSK source, evidence and tenant-integrity audit
 pnpm poc:verify-data # clean disposable PostgreSQL migration + seed + BSK data audit
-pnpm poc:benchmark benchmarks/bsk-news-radar.json # >=100 human-labelled real articles; requires >=95% precision
+pnpm poc:benchmark benchmarks/bsk-news-intelligence-golden.json # 200 human-labelled real articles; tenant-scoped DB result
+pnpm poc:benchmark:rules # offline Broader/Exclude classifier check against the frozen corpus
+pnpm poc:benchmark:discovery # known-development discovery recall against the frozen collected corpus
 pnpm --filter @suppliesignal/api start:poc-worker # five-minute collection + BSK relevance cycle
 pnpm --filter @suppliesignal/api start:worker # scheduled source collector process
 pnpm --filter @suppliesignal/api start:extraction-worker # eligible article extraction process
@@ -77,7 +79,7 @@ The database-coordinated POC worker checks only RSS/Atom sources enabled by at l
 
 Original publisher URLs remain unchanged. Direct verified graph matches become Direct impact, explicit location/country dependencies become Potential impact, and processed material supply-chain signals without a direct match can appear as Broader developments only when a deterministic trade, logistics, materials, energy, regulatory, environmental or infrastructure pathway exists. Generic politics, crime, sport, entertainment and lifestyle coverage is excluded. A source's country is discovery metadata, not proof that every article concerns that country.
 
-The monitoring profile supports English (`en`), Dutch (`nl`), German (`de`), French (`fr`), Spanish (`es`), Chinese (`zh`), Japanese (`ja`), Korean (`ko`), and Vietnamese (`vi`). Set `ARTICLE_TRANSLATION_ENABLED=true`, a server-only `OPENAI_API_KEY`, and optionally `ARTICLE_TRANSLATION_MODEL` to create schema-validated translations. Original titles, summaries, languages, and URLs are never overwritten. Translation is disabled safely when no provider is configured.
+The monitoring profile supports English (`en`), Bengali (`bn`), Burmese (`my`), Dutch (`nl`), German (`de`), French (`fr`), Spanish (`es`), Chinese (`zh`), Japanese (`ja`), Korean (`ko`), and Vietnamese (`vi`). Set `ARTICLE_TRANSLATION_ENABLED=true`, a server-only `OPENAI_API_KEY`, and optionally `ARTICLE_TRANSLATION_MODEL` to create schema-validated translations. Original titles, summaries, languages, and URLs are never overwritten. Translation is disabled safely when no provider is configured.
 
 Daily email is disabled by default. To activate it, set `DAILY_BRIEF_EMAIL_ENABLED=true`, server-only `RESEND_API_KEY`, and `DAILY_BRIEF_FROM_EMAIL`. Users then opt in per customer membership with an address, IANA timezone, delivery time, and supported language. Delivery rows have tenant-safe database references and are idempotent per preference and brief. Never expose `OPENAI_API_KEY`, `RESEND_API_KEY`, or `SUPABASE_SERVICE_ROLE_KEY` through a `VITE_` variable.
 

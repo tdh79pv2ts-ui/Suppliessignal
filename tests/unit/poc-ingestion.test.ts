@@ -105,4 +105,19 @@ describe('BSK POC ingestion cycle', () => {
     expect(result.sourceFailures).toEqual([{ sourceId: 'broken', message: 'Feed unavailable' }]);
     expect(relevance.processPending).toHaveBeenCalledOnce();
   });
+
+  it('carries malformed feed item failures into cycle completeness', async () => {
+    const service = new PocIngestionService(
+      { collect: vi.fn() } as never,
+      { processPending: vi.fn(async () => ({ articlesFound: 0, processed: 0, skipped: 0, failed: 0, exposuresCreated: 0, pending: 0 })) } as never,
+      undefined,
+      { translatePending: vi.fn(async () => ({ articlesChecked: 0, translated: 0, failed: 0, pending: 0, skipped: true })) } as never,
+      (async () => ({ expected: 1, checked: 1, collected: 1, skipped: 0, failed: 0, itemsDiscovered: 2, itemsCreated: 1, itemsSkipped: 0, itemsFailed: 1, failures: [] })) as never,
+    );
+
+    await expect(service.runCycle()).resolves.toMatchObject({
+      articleFailures: 1,
+      backlogDrained: true,
+    });
+  });
 });

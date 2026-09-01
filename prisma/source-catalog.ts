@@ -48,7 +48,7 @@ export const bskPublicSourceCatalog: SourceCatalogEntry[] = [
   source('Federation of Bangladesh Chambers of Commerce and Industry', 'https://fbcci.org/', 'Bangladesh', 'South Asia', 'INDUSTRY', 'HIGH', 'en', 'Business and manufacturing'),
   source('Dhaka Chamber of Commerce and Industry', 'https://www.dhakachamber.com/', 'Bangladesh', 'South Asia', 'INDUSTRY', 'HIGH', 'en', 'Regional business conditions'),
   source('Chittagong Chamber of Commerce and Industry', 'https://www.chittagongchamber.com/', 'Bangladesh', 'South Asia', 'INDUSTRY', 'HIGH', 'en', 'Port-region business conditions'),
-  source('The Business Standard Bangladesh', 'https://www.tbsnews.net/', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Business, apparel and trade reporting'),
+  { ...source('The Business Standard Bangladesh', 'https://www.tbsnews.net/', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Business, apparel and trade reporting'), sourceType: 'RSS', feedUrl: 'https://www.tbsnews.net/economy/industry/rss.xml', collectionEnabled: true },
   source('The Financial Express Bangladesh', 'https://thefinancialexpress.com.bd/', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Business and economic reporting'),
   source('Dhaka Tribune Business', 'https://www.dhakatribune.com/business', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Business and labour reporting'),
   source('Bangladesh Sangbad Sangstha', 'https://www.bssnews.net/', 'Bangladesh', 'South Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'National public-interest reporting'),
@@ -117,7 +117,7 @@ export const bskPublicSourceCatalog: SourceCatalogEntry[] = [
   source('Frontier Myanmar', 'https://www.frontiermyanmar.net/en/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent regional reporting'),
   source('The Irrawaddy', 'https://www.irrawaddy.com/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent national reporting'),
   source('Myanmar Now English', 'https://myanmar-now.org/en/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent national reporting'),
-  source('Democratic Voice of Burma English', 'https://english.dvb.no/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent national reporting'),
+  { ...source('Democratic Voice of Burma English', 'https://english.dvb.no/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'Independent national reporting'), sourceType: 'RSS', feedUrl: 'https://english.dvb.no/feed/', collectionEnabled: true },
   source('Mizzima News', 'https://eng.mizzima.com/', 'Myanmar', 'Southeast Asia', 'LOCAL_NEWS', 'HIGH', 'en', 'National and regional reporting'),
 
   // Global and cross-border intelligence: authorities, industry bodies and disaster feeds.

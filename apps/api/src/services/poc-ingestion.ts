@@ -64,7 +64,9 @@ export class PocIngestionService {
     let articlesFound = 0;
     let articlesProcessed = 0;
     let articlesSkipped = 0;
-    let articleFailures = 0;
+    // Feed item parse/persistence failures are article failures too. Carry them
+    // into the authoritative cycle status so PARTIAL can never become current.
+    let articleFailures = collection.itemsFailed ?? 0;
     let relevanceMatchesCreated = 0;
     let batchesProcessed = 0;
 

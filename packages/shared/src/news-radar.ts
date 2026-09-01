@@ -25,6 +25,8 @@ export const intelligenceLanguages = [
   'de',
   'fr',
   'es',
+  'bn',
+  'my',
   'zh',
   'ja',
   'ko',

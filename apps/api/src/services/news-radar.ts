@@ -14,7 +14,7 @@ import {
 } from './news-radar-matching.js';
 
 const LEASE_MS = 2 * 60 * 1000;
-export const NEWS_RADAR_POLICY_VERSION = '3.3';
+export const NEWS_RADAR_POLICY_VERSION = '3.4';
 
 const exposureInclude = {
   sourceArticle: { include: { source: true, translations: { where: { status: 'COMPLETED' as const } } } },
@@ -138,20 +138,32 @@ export class NewsRadarService {
   }
 
   private async intelligenceFromMatches(customerId: string, preferredLanguage: string, matches: ExposureRow[]) {
-    const [enabledPreferences, broaderProcessing] = await Promise.all([
+    const [enabledPreferences, broaderProcessing, graph] = await Promise.all([
       db.customerSourcePreference.findMany({ where: { customerId, enabled: true }, select: { sourceId: true } }),
       db.newsRadarArticleProcessing.findMany({
-        where: { status: 'COMPLETED', policyVersion: NEWS_RADAR_POLICY_VERSION, topics: { isEmpty: false }, sourceArticle: { source: { active: true } } },
+        where: { status: 'COMPLETED', policyVersion: NEWS_RADAR_POLICY_VERSION, sourceArticle: { source: { active: true } } },
         include: { sourceArticle: { include: { source: true, translations: { where: { status: 'COMPLETED' } } } } },
         orderBy: { sourceArticle: { discoveredAt: 'desc' } },
         take: 250,
       }),
+      this.graph(customerId),
     ]);
     const directAndPotential = groupRelevantArticles(matches, preferredLanguage);
     const matchedArticleIds = new Set(directAndPotential.map((item) => item.id));
     const enabledSourceIds = new Set(enabledPreferences.map((item) => item.sourceId));
     const broader: IntelligenceArticleInput[] = broaderProcessing
-      .filter((processing) => enabledSourceIds.has(processing.sourceArticle.sourceId) && !matchedArticleIds.has(processing.sourceArticleId))
+      .filter((processing) => {
+        if (!enabledSourceIds.has(processing.sourceArticle.sourceId) || matchedArticleIds.has(processing.sourceArticleId)) return false;
+        const article = processing.sourceArticle;
+        const english = article.translations.find((value) => value.targetLanguage === 'en');
+        return isBroaderSupplyChainDevelopment({
+          title: article.title,
+          excerpt: article.excerpt,
+          normalizedText: article.normalizedText,
+          translatedTitle: english?.translatedTitle ?? null,
+          translatedSummary: english?.translatedSummary ?? null,
+        }, undefined, graph);
+      })
       .map((processing) => {
         const article = processing.sourceArticle;
         const translation = article.translations.find((value) => value.targetLanguage === preferredLanguage);
@@ -261,7 +273,7 @@ export class NewsRadarService {
           normalizedText: article.normalizedText,
           translatedTitle: english?.translatedTitle ?? null,
           translatedSummary: english?.translatedSummary ?? null,
-        }, result.topics)) result.topics.forEach((value) => topics.add(value));
+        }, result.topics, graph)) result.topics.forEach((value) => topics.add(value));
         result.detectedTerms.forEach((value) => terms.add(value));
         result.detectedLocations.forEach((value) => locations.add(value));
         for (const match of result.matches) {
@@ -318,10 +330,18 @@ export class NewsRadarService {
 
   private async customerGraphs() {
     const customers = await db.customer.findMany({ select: { id: true } });
-    return Promise.all(customers.map(async ({ id }) => {
-      const [graph, monitoringTags] = await Promise.all([this.graph(id), monitoringProfileService.activeTags(id)]);
-      return { customerId: id, graph: { ...graph, monitoringTags } };
+    const graphs = await Promise.all(customers.map(async ({ id }) => {
+      try {
+        const [graph, monitoringTags] = await Promise.all([this.graph(id), monitoringProfileService.activeTags(id)]);
+        return { customerId: id, graph: { ...graph, monitoringTags } };
+      } catch (error) {
+        // A customer can be removed after the initial list read. That tenant no
+        // longer needs processing and must not abort every remaining customer.
+        if (error instanceof ServiceError && error.code === 'CUSTOMER_NOT_FOUND') return null;
+        throw error;
+      }
     }));
+    return graphs.filter((value): value is NonNullable<typeof value> => value !== null);
   }
 
   private async graph(customerId: string): Promise<NewsRadarGraph> {

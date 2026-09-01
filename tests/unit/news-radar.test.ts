@@ -43,6 +43,16 @@ describe('deterministic supply-chain news radar matching', () => {
     })).matches).toHaveLength(0);
   });
 
+  it('does not create a city-country Potential match from deep-body location noise', () => {
+    expect(matchArticleToSupplyChain({
+      title: 'US freezes immigration interviews worldwide',
+      excerpt: 'The policy affects visa appointments and consular processing.',
+      normalizedText: 'Related coverage mentions flooding near factories in Guangzhou, China.',
+    }, graph({
+      factories: [{ id: 'factory-china', name: 'Guangzhou Factory', country: 'China', city: 'Guangzhou' }],
+    })).matches).toHaveLength(0);
+  });
+
   it('never promotes country-only context to customer impact', () => {
     const chinaGraph = graph({
       factories: [{ id: 'factory-china', name: 'Guangzhou Factory', country: 'China', city: 'Guangzhou' }],
@@ -139,6 +149,7 @@ describe('controlled broader-development classification', () => {
     expect(isBroaderSupplyChainDevelopment({ title: 'New export controls restrict semiconductor supply chains' })).toBe(true);
     expect(isBroaderSupplyChainDevelopment({ title: 'Conflict delays Red Sea shipping and freight routes' })).toBe(true);
     expect(isBroaderSupplyChainDevelopment({ title: 'M 7.4 earthquake strikes coastal region' })).toBe(true);
+    expect(isBroaderSupplyChainDevelopment({ title: 'M 7.7 - 68 km NNW of Ende, Indonesia' })).toBe(true);
     expect(isBroaderSupplyChainDevelopment({ title: 'M 5.4 earthquake strikes coastal region' })).toBe(false);
   });
 
@@ -152,5 +163,25 @@ describe('controlled broader-development classification', () => {
   it('requires an operational supply-chain pathway rather than a disruption keyword alone', () => {
     expect(isBroaderSupplyChainDevelopment({ title: 'Fire disrupts regional manufacturing production' })).toBe(true);
     expect(isBroaderSupplyChainDevelopment({ title: 'Fire closes a private residence' })).toBe(false);
+  });
+
+  it('does not use unrelated deep-body text as broader-development evidence', () => {
+    expect(isBroaderSupplyChainDevelopment({
+      title: 'Election debate focuses on schools',
+      excerpt: 'Candidates discussed education policy.',
+      normalizedText: 'Related stories: port closure disrupts shipping supply chain.',
+    })).toBe(false);
+  });
+
+  it('rejects generic supply-chain commentary without a material disruption', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'How AI may reshape supply chain strategy' })).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Commodity outlook for modern manufacturing' })).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Presidential debate focuses on investment and tariffs' })).toBe(false);
+  });
+
+  it('recognizes material energy and trade-policy pathways', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'Narsingdi textile factories gasp for gas as gas crisis deepens' })).toBe(true);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Bangladesh and India discuss lifting yarn import curbs' })).toBe(true);
+    expect(isBroaderSupplyChainDevelopment({ title: 'United Kingdom launches safeguard investigation on polyethylene terephthalate' })).toBe(true);
   });
 });

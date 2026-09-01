@@ -283,8 +283,9 @@ export class SourceIntelligenceService {
         where: { id: sourceId },
         data: {
           lastCollectedAt: new Date(),
-          lastSuccessfulCollectionAt: new Date(),
-          consecutiveFailures: 0,
+          ...(status === 'SUCCESS'
+            ? { lastSuccessfulCollectionAt: new Date(), consecutiveFailures: 0 }
+            : { lastFailureAt: new Date(), consecutiveFailures: { increment: 1 } }),
         },
       });
       console.info(

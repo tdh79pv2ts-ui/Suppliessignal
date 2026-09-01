@@ -15,6 +15,13 @@ const attr = (xml: string, tag: string, name: string) =>
   xml.match(
     new RegExp(`<${tag}[^>]*\\s${name}=["']([^"']+)["'][^>]*>`, 'i'),
   )?.[1];
+
+function inferLanguage(value: string): string | undefined {
+  if (/\p{Script=Myanmar}/u.test(value)) return 'my';
+  if (/\p{Script=Bengali}/u.test(value)) return 'bn';
+  if (/\p{Script=Han}/u.test(value)) return 'zh';
+  return undefined;
+}
 export function parseFeed(
   xml: string,
   baseUrl: string,
@@ -56,12 +63,14 @@ export function parseFeed(
         block,
         atom ? ['name', 'author'] : ['dc:creator', 'author'],
       );
+      const language = inferLanguage(`${title} ${rawText ?? ''}`);
       items.push({
         title,
         originalUrl: new URL(link, baseUrl).toString(),
         ...(externalId ? { externalId } : {}),
         ...(author ? { author } : {}),
         publishedAt: new Date(published),
+        ...(language ? { language } : {}),
         ...(rawText ? { rawText, excerpt: rawText } : {}),
       });
     } catch {
