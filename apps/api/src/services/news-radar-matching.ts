@@ -80,9 +80,9 @@ const disruptionTerms = [
 ];
 
 const countryAliases: Record<string, string[]> = {
-  china: ['china', '中国', '中国', '중국', 'trung quốc'],
-  myanmar: ['myanmar', 'burma', 'မြန်မာ'],
-  bangladesh: ['bangladesh', 'বাংলাদেশ'],
+  china: ['china', 'chinese', '中国', '中国', '중국', 'trung quốc'],
+  myanmar: ['myanmar', 'burma', 'burmese', 'မြန်မာ'],
+  bangladesh: ['bangladesh', 'bangladeshi', 'বাংলাদেশ'],
 };
 
 export function normalizeRadarText(value: string): string {
@@ -159,26 +159,51 @@ export function isBroaderSupplyChainDevelopment(
     broaderPathwayTerms[topic].some((term) => containsPhrase(text, term)),
   );
   if (!hasPathway) return false;
-  if (detectedTopics.includes('ENVIRONMENTAL') && environmentalMagnitude) return true;
-  const graphTerms = graph ? [
-    ...graph.suppliers.flatMap((node) => [node.name, node.legalName, node.city, node.country]),
-    ...graph.factories.flatMap((node) => [node.name, node.city, node.country]),
-    ...graph.products.flatMap((node) => [node.name, node.category]),
-    ...graph.materials.flatMap((node) => [node.name, node.commodity]),
+  if (detectedTopics.includes('ENVIRONMENTAL') && environmentalMagnitude && !graph) return true;
+  const graphIdentityTerms = graph ? [
+    ...graph.suppliers.flatMap((node) => [node.name, node.legalName, node.city]),
+    ...graph.factories.flatMap((node) => [node.name, node.city]),
     ...graph.routes.flatMap((node) => [node.name, node.originLabel, node.destinationLabel]),
+  ].filter((value): value is string => Boolean(value)) : [];
+  const graphCountryTerms = graph ? [
+    ...graph.suppliers.map((node) => node.country),
+    ...graph.factories.map((node) => node.country),
+  ].filter((value): value is string => Boolean(value)) : [];
+  const graphSectorTerms = graph ? [
+    ...graph.products.flatMap((node) => [node.name, node.category]),
+    ...graph.materials.flatMap((node) => {
+      const normalized = normalizeRadarText([node.name, node.commodity].filter(Boolean).join(' '));
+      const fashionMaterial = ['leather', 'nylon', 'polyester', 'polyurethane'].some((term) => normalized.includes(term));
+      return [
+        node.name,
+        node.commodity,
+        ...(normalized.includes('polyester') ? ['polyethylene terephthalate'] : []),
+        ...(fashionMaterial ? ['garment', 'textile', 'leather', 'yarn', 'bag', 'bags'] : []),
+      ];
+    }),
     ...graph.factories.flatMap((node) => {
       const country = normalizeRadarText(node.country ?? '');
-      return country === 'china' ? ['Chinese'] : country === 'bangladesh' ? ['Bangladeshi'] : country === 'myanmar' ? ['Burmese'] : [];
+      return country === 'bangladesh' || country === 'myanmar' ? ['garment', 'textile'] : [];
     }),
   ].filter((value): value is string => Boolean(value)) : [];
-  const hasCustomerContext = graphTerms.some((term) => containsPhrase(text, term));
+  const hasCustomerIdentityContext = graphIdentityTerms.some((term) => containsPhrase(text, term));
+  const hasCustomerCountryContext = graphCountryTerms.some((term) => Boolean(matchingLocationTerm(text, term)));
+  const hasCustomerSectorContext = graphSectorTerms.some((term) => containsPhrase(text, term));
   const hasSectorContext = ['factory', 'factories', 'manufacturing', 'semiconductor', 'garment', 'textile', 'leather', 'yarn', 'bag', 'bags', 'polyester', 'nylon', 'polyurethane', 'polyethylene terephthalate'].some((term) => containsPhrase(text, term));
-  const hasSystemicContext = ['global', 'supply chain', 'red sea', 'strait of hormuz', 'middle east', 'oil exports', 'lng', 'wto', 'carbon border'].some((term) => containsPhrase(text, term));
+  const hasSystemicContext = ['global', 'red sea', 'strait of hormuz', 'middle east', 'oil exports', 'lng', 'wto', 'carbon border'].some((term) => containsPhrase(text, term));
   const hasOperationalNoun = ['tariff', 'tariffs', 'curb', 'curbs', 'export', 'exporters', 'import', 'imports', 'shipping', 'freight', 'port', 'factory', 'factories', 'manufacturing', 'energy', 'oil', 'gas', 'commodity', 'raw material', 'goods'].some((term) => containsPhrase(text, term));
+  const hasTradePolicySignal = ['tariff', 'tariffs', 'export control', 'export controls', 'import restriction', 'export restriction', 'import curb', 'import curbs', 'export curb', 'export curbs', 'import ban', 'export ban', 'ban', 'customs', 'transshipment', 'safeguard investigation', 'carbon border'].some((term) => containsPhrase(text, term));
+  const hasEnvironmentalPathway = detectedTopics.includes('ENVIRONMENTAL') && environmentalMagnitude &&
+    ['factory', 'factories', 'manufacturing', 'port', 'shipping', 'road', 'rail', 'infrastructure', 'supply chain'].some((term) => containsPhrase(text, term));
   const discussionOnly = ['debate', 'opinion', 'commentary'].some((term) => containsPhrase(text, term)) &&
     !['restrict', 'restricted', 'ban', 'curb', 'curbs', 'halt', 'shutdown', 'disrupt', 'disruption', 'launches', 'imposes'].some((term) => containsPhrase(text, term));
   if (discussionOnly) return false;
-  return graph ? (hasCustomerContext && hasOperationalNoun) || hasSectorContext || hasSystemicContext : hasSectorContext || hasSystemicContext;
+  return graph
+    ? (hasCustomerIdentityContext && (hasOperationalNoun || environmentalMagnitude)) ||
+      (hasCustomerCountryContext && (hasCustomerSectorContext || hasTradePolicySignal || hasEnvironmentalPathway)) ||
+      (hasCustomerSectorContext && (hasOperationalNoun || hasTradePolicySignal)) ||
+      hasSystemicContext
+    : hasSectorContext || hasSystemicContext;
 }
 
 function customerStep(graph: NewsRadarGraph) {

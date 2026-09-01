@@ -145,6 +145,17 @@ describe('deterministic supply-chain news radar matching', () => {
 });
 
 describe('controlled broader-development classification', () => {
+  const bskGraph = graph({
+    suppliers: [],
+    factories: [
+      { id: 'china-factory', name: 'Guangzhou Factory', country: 'China', city: 'Guangzhou' },
+      { id: 'bangladesh-factory', name: 'Cumilla EPZ Factory', country: 'Bangladesh', city: 'Cumilla' },
+    ],
+    products: [{ id: 'bags', name: 'Fashion Bags', category: 'Bags and accessories' }],
+    materials: [{ id: 'polyester', name: 'Polyester', commodity: 'Synthetic fibre' }],
+    routes: [],
+  });
+
   it('accepts material trade, logistics and major natural-disaster pathways', () => {
     expect(isBroaderSupplyChainDevelopment({ title: 'New export controls restrict semiconductor supply chains' })).toBe(true);
     expect(isBroaderSupplyChainDevelopment({ title: 'Conflict delays Red Sea shipping and freight routes' })).toBe(true);
@@ -183,5 +194,25 @@ describe('controlled broader-development classification', () => {
     expect(isBroaderSupplyChainDevelopment({ title: 'Narsingdi textile factories gasp for gas as gas crisis deepens' })).toBe(true);
     expect(isBroaderSupplyChainDevelopment({ title: 'Bangladesh and India discuss lifting yarn import curbs' })).toBe(true);
     expect(isBroaderSupplyChainDevelopment({ title: 'United Kingdom launches safeguard investigation on polyethylene terephthalate' })).toBe(true);
+  });
+
+  it('rejects major natural disasters outside the customer graph', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'M 7.7 - 68 km NNW of Ende, Indonesia' }, undefined, bskGraph)).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'M 7.4 - 5 km S of San Jose del Palmar, Colombia' }, undefined, bskGraph)).toBe(false);
+  });
+
+  it('requires a credible pathway for country-level environmental coverage', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'Catastrophic typhoon affects southern China residents' }, undefined, bskGraph)).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Catastrophic typhoon closes factories and roads in China' }, undefined, bskGraph)).toBe(true);
+  });
+
+  it('requires customer-sector relevance for local energy disruption', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'Bangladesh food factory halts amid gas crunch' }, undefined, bskGraph)).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'Bangladesh textile factories halt amid gas crunch' }, undefined, bskGraph)).toBe(true);
+  });
+
+  it('rejects generic military supply-chain studies but retains material trade policy', () => {
+    expect(isBroaderSupplyChainDevelopment({ title: 'China drone production can meet war demand, supply chain study finds' }, undefined, bskGraph)).toBe(false);
+    expect(isBroaderSupplyChainDevelopment({ title: 'China exporters face new tariff and transshipment restrictions' }, undefined, bskGraph)).toBe(true);
   });
 });

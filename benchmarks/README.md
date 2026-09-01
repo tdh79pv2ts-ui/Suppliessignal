@@ -10,7 +10,7 @@ contains no article bodies, customer identifiers, credentials or production
 classification output. `bsk-news-intelligence-golden.json` records the
 independently human-reviewed label and reason for every item.
 
-The observed corpus distribution is 0 Direct, 0 Potential, 18 Broader and 182
+The observed corpus distribution is 0 Direct, 0 Potential, 14 Broader and 186
 Exclude. The absence of Direct/Potential cases is a measured source-coverage
 gap, not a reason to synthesize cases or claim vacuous precision. This corpus
 predates the source-coverage hardening migration: it contains articles from
@@ -45,6 +45,12 @@ measured causes; classification tuning cannot repair discovery. The added
 machine-readable regional/global feeds can only be judged on a new
 post-deployment monitoring window and do not retroactively change this frozen
 result.
+
+Golden version 1.2 records a documented human-review correction for four
+environmental headlines found during staging validation. Magnitude alone, and
+a customer-country name alone, do not establish the required manufacturing,
+logistics or infrastructure pathway. The correction is explicit in the
+dataset history; it was not derived from classifier output.
 
 ## Coverage matrix
 

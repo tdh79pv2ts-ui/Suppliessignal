@@ -1,12 +1,13 @@
 {
   "name": "BSK News Intelligence Golden Benchmark",
-  "version": "1.1",
+  "version": "1.2",
   "frozenAt": "2026-08-25T03:30:00.000Z",
   "labelingPolicy": "Human review of public title, publisher, publication time and original URL; labels are not derived from production output.",
   "limitations": [
     "The current enabled-source corpus contains no real Direct or Potential candidate; this is retained as a measured discovery coverage gap.",
     "Full article body text remains in the database and is not copied into the repository.",
-    "Version 1.1 removed labels whose public headline did not itself establish a material pathway; source-country metadata is not treated as article evidence."
+    "Version 1.1 removed labels whose public headline did not itself establish a material pathway; source-country metadata is not treated as article evidence.",
+    "Version 1.2 corrected four environmental labels after staging review: magnitude or a customer-country name alone is not a supply-chain pathway."
   ],
   "articles": [
     {
@@ -702,11 +703,11 @@
       "publishedAt": "2026-08-23T19:50:18.790Z",
       "language": "unknown",
       "sourceName": "USGS Significant Earthquakes",
-      "expectedClass": "BROADER",
+      "expectedClass": "EXCLUDE",
       "expectedEntityType": null,
       "expectedEntityName": null,
-      "expectedTopic": "ENVIRONMENTAL",
-      "expectedReason": "A major natural disaster in the wider Asian operating region may disrupt infrastructure or logistics, without confirming BSK exposure.",
+      "expectedTopic": null,
+      "expectedReason": "The headline identifies no BSK geography and states no manufacturing, logistics or infrastructure pathway.",
       "reviewStatus": "HUMAN_REVIEWED"
     },
     {
@@ -1248,11 +1249,11 @@
       "publishedAt": "2026-08-21T08:12:15.000Z",
       "language": "en",
       "sourceName": "South China Morning Post — China",
-      "expectedClass": "BROADER",
+      "expectedClass": "EXCLUDE",
       "expectedEntityType": null,
       "expectedEntityName": null,
-      "expectedTopic": "ENVIRONMENTAL",
-      "expectedReason": "A major natural disaster in the wider Asian operating region may disrupt infrastructure or logistics, without confirming BSK exposure.",
+      "expectedTopic": null,
+      "expectedReason": "A customer-country name alone is insufficient; the headline states no manufacturing, logistics or infrastructure pathway.",
       "reviewStatus": "HUMAN_REVIEWED"
     },
     {
@@ -1626,11 +1627,11 @@
       "publishedAt": "2026-08-14T03:32:41.963Z",
       "language": "unknown",
       "sourceName": "USGS Significant Earthquakes",
-      "expectedClass": "BROADER",
+      "expectedClass": "EXCLUDE",
       "expectedEntityType": null,
       "expectedEntityName": null,
-      "expectedTopic": "ENVIRONMENTAL",
-      "expectedReason": "A major natural disaster in the wider Asian operating region may disrupt infrastructure or logistics, without confirming BSK exposure.",
+      "expectedTopic": null,
+      "expectedReason": "The headline identifies no BSK geography and states no manufacturing, logistics or infrastructure pathway.",
       "reviewStatus": "HUMAN_REVIEWED"
     },
     {
@@ -2284,11 +2285,11 @@
       "publishedAt": "2026-08-12T05:33:52.167Z",
       "language": "unknown",
       "sourceName": "USGS Significant Earthquakes",
-      "expectedClass": "BROADER",
+      "expectedClass": "EXCLUDE",
       "expectedEntityType": null,
       "expectedEntityName": null,
-      "expectedTopic": "ENVIRONMENTAL",
-      "expectedReason": "A major natural disaster in the wider Asian operating region may disrupt infrastructure or logistics, without confirming BSK exposure.",
+      "expectedTopic": null,
+      "expectedReason": "The headline identifies no BSK geography and states no manufacturing, logistics or infrastructure pathway.",
       "reviewStatus": "HUMAN_REVIEWED"
     },
     {
